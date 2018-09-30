@@ -28,6 +28,9 @@ pub struct PlayerData {
     pub keystate: ServerKeyState,
 
     pub votemuted: bool,
+
+    pub kills: u32,
+    pub deaths: u32,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -102,6 +105,37 @@ impl GameState {
         }
     }
 
+    fn handle_player_level(&mut self, packet: &PlayerLevel) {
+        if let Some(player) = self.players.get_mut(&packet.id) {
+            player.level = packet.level;
+        }
+        else {
+            info!("Got update for nonexistent player {}", packet.id.0);
+        }
+    }
+
+    fn handle_player_new(&mut self, packet: &PlayerNew) {
+        self.players.insert(packet.id, PlayerData {
+            name: packet.name.clone(),
+            team: packet.team,
+            flag: packet.flag,
+            plane: packet.ty,
+            status: packet.status,
+            upgrades: packet.upgrades,
+
+            pos: packet.pos,
+            rot: packet.rot,
+
+            health: Health::new(1.0),
+            energy: Energy::new(1.0),
+
+            ..Default::default()
+        });
+    }
+    fn handle_player_leave(&mut self, packet: &PlayerLeave) {
+        self.players.remove(&packet.id);
+    }
+
     fn handle_chat_vote_muted(&mut self) {
         self.players
             .get_mut(&self.me.id)
@@ -120,6 +154,9 @@ impl GameState {
 
         match packet {
             Login(p) => self.handle_login(p),
+            PlayerNew(p) => self.handle_player_new(p),
+            PlayerLeave(p) => self.handle_player_leave(p),
+            PlayerLevel(p) => self.handle_player_level(p),
             PlayerUpdate(p) => self.handle_player_update(p),
             ChatVoteMuted => self.handle_chat_vote_muted(),
             ChatVoteMutePassed(p) => self.handle_chat_vote_mute_passed(p),
