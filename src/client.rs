@@ -5,7 +5,7 @@ use std::borrow::Borrow;
 use std::error::Error;
 use std::mem;
 use std::sync::mpsc::{channel, Receiver};
-use std::thread::{spawn, JoinHandle};
+use std::thread::{self, spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
 use gamestate::GameState;
@@ -40,12 +40,11 @@ where
 
     pub fn with_protocol<S>(addr: S, protocol: P) -> Result<Self, Box<Error>>
     where
-        S: ToOwned<Owned = String>,
-        String: Borrow<S>,
+        S: ToString,
     {
         use self::ReceivedMessageData::Open;
 
-        let (handle, channel) = Self::create_event_thread(addr.to_owned());
+        let (handle, channel) = Self::create_event_thread(addr.to_string());
 
         let sender = match channel.recv()?.data {
             Open(sender) => sender,
@@ -148,14 +147,13 @@ where
         session: S,
     ) -> Result<&'a mut Self, Box<Error>>
     where
-        N: ToOwned<Owned = String>,
+        N: ToString,
         S: Into<Option<String>>,
-        F: ToOwned<Owned = String>,
-        String: Borrow<N> + Borrow<F>,
+        F: ToString,
     {
         self.login_with_session_and_horizon(
-            name.to_owned(),
-            flag.to_owned(),
+            name.to_string(),
+            flag.to_string(),
             session.into(),
             4500,
             4500,
@@ -164,11 +162,10 @@ where
 
     pub fn login<'a, N, F>(&'a mut self, name: N, flag: F) -> Result<&'a mut Self, Box<Error>>
     where
-        N: ToOwned<Owned = String>,
-        F: ToOwned<Owned = String>,
-        String: Borrow<N> + Borrow<F>,
+        N: ToString,
+        F: ToString,
     {
-        self.login_with_session(name.to_owned(), flag.to_owned(), None)
+        self.login_with_session(name.to_string(), flag.to_string(), None)
     }
 
     pub fn disconnect<'a>(&'a mut self) -> Result<&'a mut Self, Box<Error>> {
@@ -181,13 +178,31 @@ where
 
         Ok(self)
     }
+
+    pub fn wait<'a>(&'a mut self, duration: Duration) -> Result<&'a mut Self, Box<Error>> {
+        thread::sleep(duration);
+
+        self.update_state()
+    }
+
+    pub fn chat<'a, S>(&'a mut self, message: S) -> Result<&'a mut Self, Box<Error>>
+    where
+        S: ToString,
+    {
+        use protocol::client::Chat;
+
+        self.send_packet(Chat {
+            text: (&message).to_string(),
+        })?;
+
+        self.update_state()
+    }
 }
 
 impl Client<ProtocolV5> {
     pub fn new<S>(addr: S) -> Result<Self, Box<Error>>
     where
-        S: ToOwned<Owned = String>,
-        String: Borrow<S>,
+        S: ToString,
     {
         Self::with_protocol(addr, ProtocolV5)
     }

@@ -90,12 +90,14 @@ impl GameState {
     }
 
     fn handle_chat_vote_muted(&mut self) {
-        self.players.get_mut(&self.me.id)
+        self.players
+            .get_mut(&self.me.id)
             .expect("The current player doesn't exist!")
             .votemuted = true;
     }
     fn handle_chate_vote_mute_passed(&mut self, packet: &ChatVoteMutePassed) {
-        self.players.get_mut(&packet.id)
+        self.players
+            .get_mut(&packet.id)
             .map(|x| x.votemuted = false);
     }
 

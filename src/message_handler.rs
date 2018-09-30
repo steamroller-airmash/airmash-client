@@ -54,8 +54,14 @@ impl Handler for MessageHandler {
 }
 
 pub(crate) fn websocket_runner(addr: String, channel: Sender<ReceivedMessage>) {
-    ws::connect(addr, move |out| MessageHandler {
+    info!("Starting websocket connection to {}", addr);
+
+    let result = ws::connect(addr, move |out| MessageHandler {
         channel: channel.clone(),
         sender: out,
-    }).ok();
+    });
+
+    if let Err(e) = result {
+        error!("Connection failed with error {}", e);
+    }
 }
