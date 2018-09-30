@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use fnv::FnvHashMap;
 
+#[derive(Debug, Clone)]
 pub struct PlayerData {
     pub pos: Position,
     pub rot: Rotation,
@@ -24,20 +25,21 @@ pub struct PlayerData {
     /// Whether the player is alive or dead
     pub status: PlayerStatus,
     pub plane: PlaneType,
+    pub keystate: ServerKeyState,
 
     pub votemuted: bool,
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct MyPlayerData {
     pub id: Player,
     pub token: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct MobData {}
 
-pub struct MissileData {}
-
+#[derive(Default, Debug, Clone)]
 pub struct GameState {
     pub players: FnvHashMap<Player, PlayerData>,
     pub mobs: FnvHashMap<Mob, MobData>,
@@ -73,6 +75,7 @@ impl GameState {
                     level: player.level,
                     team: player.team,
                     upgrades: player.upgrades,
+                    keystate: Default::default(),
 
                     votemuted: false,
                 },
@@ -89,13 +92,28 @@ impl GameState {
         self.game_ty = packet.ty;
     }
 
+    fn handle_player_update(&mut self, packet: &PlayerUpdate) {
+        self.clock = packet.clock;
+
+        if let Some(player) = self.players.get_mut(&packet.id) {
+            player.keystate = packet.keystate;
+            player.upgrades = packet.upgrades;
+            player.pos = packet.pos;
+            player.rot = packet.rot;
+            player.vel = packet.speed;
+        }
+        else {
+            info!("Got update for nonexistent player {}", packet.id.0);
+        }
+    }
+
     fn handle_chat_vote_muted(&mut self) {
         self.players
             .get_mut(&self.me.id)
             .expect("The current player doesn't exist!")
             .votemuted = true;
     }
-    fn handle_chate_vote_mute_passed(&mut self, packet: &ChatVoteMutePassed) {
+    fn handle_chat_vote_mute_passed(&mut self, packet: &ChatVoteMutePassed) {
         self.players
             .get_mut(&packet.id)
             .map(|x| x.votemuted = false);
@@ -107,27 +125,13 @@ impl GameState {
 
         match packet {
             Login(p) => self.handle_login(p),
+            PlayerUpdate(p) => self.handle_player_update(p),
             ChatVoteMuted => self.handle_chat_vote_muted(),
-            ChatVoteMutePassed(p) => self.handle_chate_vote_mute_passed(p),
+            ChatVoteMutePassed(p) => self.handle_chat_vote_mute_passed(p),
             _ => (),
         }
     }
 
     /// Update game state given that a frame has passed
     pub(crate) fn update_frame(&mut self, now: Instant) {}
-}
-
-impl Default for GameState {
-    fn default() -> Self {
-        Self {
-            players: Default::default(),
-            mobs: Default::default(),
-            me: Default::default(),
-
-            game_ty: GameType::FFA,
-
-            clock: Default::default(),
-            room: Default::default(),
-        }
-    }
 }
