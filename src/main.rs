@@ -9,7 +9,7 @@ use std::time::Duration;
 
 fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     Client::new(server)?
-        .login(name, "CA")?
+        .login(name, "JOLLY")?
         .wait(Duration::from_secs(5))?
         .chat("TEST CHAT")?
         .wait(Duration::from_secs(2))?

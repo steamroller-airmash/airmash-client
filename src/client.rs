@@ -1,4 +1,4 @@
-use protocol::{ClientPacket, Protocol};
+use protocol::{ClientPacket, ServerPacket, Protocol};
 use protocol_v5::ProtocolV5;
 
 use std::error::Error;
@@ -64,13 +64,30 @@ where
         })
     }
 
+    fn handle_packet(&mut self, packet: &ServerPacket) -> Result<(), Box<Error>> {
+        use self::ServerPacket::*;
+        use protocol::client::Pong;
+
+        match packet {
+            Ping(ping) => {
+                self.send_packet(Pong {
+                    num: ping.num,
+                })?;
+            },
+            _ => ()
+        };
+
+        Ok(())
+    }
+
     fn update_state_once(&mut self) -> Result<(), Box<Error>> {
         let frame_end = self.last_update + FRAME_TIME;
-        let iter = self.packets.try_iter().filter(|x| x.time < frame_end);
+        let iter = self.packets.try_iter().filter(|x| x.time < frame_end).collect::<Vec<_>>();
 
         for msg in iter {
             if let Ok(packet) = msg.as_packet(&self.protocol) {
                 self.state.update_state(&packet);
+                self.handle_packet(&packet)?;
             }
         }
 
