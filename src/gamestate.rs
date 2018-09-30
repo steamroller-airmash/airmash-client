@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use fnv::FnvHashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PlayerData {
     pub pos: Position,
     pub rot: Rotation,
@@ -60,24 +60,19 @@ impl GameState {
                 PlayerData {
                     pos: player.pos,
                     rot: player.rot,
-                    vel: Default::default(),
 
                     health: Health::new(1.0),
                     energy: Energy::new(1.0),
-                    health_regen: Default::default(),
-                    energy_regen: Default::default(),
 
                     name: player.name.clone(),
                     status: player.status,
                     plane: player.ty,
                     flag: player.flag,
-                    score: Default::default(),
                     level: player.level,
                     team: player.team,
                     upgrades: player.upgrades,
-                    keystate: Default::default(),
 
-                    votemuted: false,
+                    ..Default::default()
                 },
             )
         }));
