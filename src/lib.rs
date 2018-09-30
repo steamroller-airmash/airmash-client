@@ -4,7 +4,7 @@
 extern crate ws;
 #[macro_use]
 extern crate log;
-extern crate airmash_protocol as protocol;
+pub extern crate airmash_protocol as protocol;
 extern crate airmash_protocol_v5 as protocol_v5;
 extern crate fnv;
 
