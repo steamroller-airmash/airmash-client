@@ -1,7 +1,6 @@
 use protocol::{ClientPacket, Protocol};
 use protocol_v5::ProtocolV5;
 
-use std::borrow::Borrow;
 use std::error::Error;
 use std::mem;
 use std::sync::mpsc::{channel, Receiver};
@@ -200,11 +199,11 @@ where
 
     pub fn say<'a, S>(&'a mut self, message: S) -> Result<&'a mut Self, Box<Error>>
     where
-        S: ToString
+        S: ToString,
     {
-        use protocol::client::Chat;
+        use protocol::client::Say;
 
-        self.send_packet(Chat {
+        self.send_packet(Say {
             text: (&message).to_string(),
         })?;
 

@@ -13,6 +13,8 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
         .wait(Duration::from_secs(5))?
         .chat("TEST CHAT")?
         .wait(Duration::from_secs(2))?
+        .say("-bot-")?
+        .wait(Duration::from_secs(10))?
         .disconnect()?;
 
     Ok(())

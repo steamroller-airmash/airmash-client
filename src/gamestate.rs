@@ -99,8 +99,7 @@ impl GameState {
             player.pos = packet.pos;
             player.rot = packet.rot;
             player.vel = packet.speed;
-        }
-        else {
+        } else {
             info!("Got update for nonexistent player {}", packet.id.0);
         }
     }
@@ -108,29 +107,31 @@ impl GameState {
     fn handle_player_level(&mut self, packet: &PlayerLevel) {
         if let Some(player) = self.players.get_mut(&packet.id) {
             player.level = packet.level;
-        }
-        else {
+        } else {
             info!("Got update for nonexistent player {}", packet.id.0);
         }
     }
 
     fn handle_player_new(&mut self, packet: &PlayerNew) {
-        self.players.insert(packet.id, PlayerData {
-            name: packet.name.clone(),
-            team: packet.team,
-            flag: packet.flag,
-            plane: packet.ty,
-            status: packet.status,
-            upgrades: packet.upgrades,
+        self.players.insert(
+            packet.id,
+            PlayerData {
+                name: packet.name.clone(),
+                team: packet.team,
+                flag: packet.flag,
+                plane: packet.ty,
+                status: packet.status,
+                upgrades: packet.upgrades,
 
-            pos: packet.pos,
-            rot: packet.rot,
+                pos: packet.pos,
+                rot: packet.rot,
 
-            health: Health::new(1.0),
-            energy: Energy::new(1.0),
+                health: Health::new(1.0),
+                energy: Energy::new(1.0),
 
-            ..Default::default()
-        });
+                ..Default::default()
+            },
+        );
     }
     fn handle_player_leave(&mut self, packet: &PlayerLeave) {
         self.players.remove(&packet.id);
