@@ -1,4 +1,4 @@
-use protocol::{ClientPacket, ServerPacket, Protocol};
+use protocol::{ClientPacket, ServerPacket, Protocol, Position};
 use protocol_v5::ProtocolV5;
 
 use std::error::Error;
@@ -225,6 +225,43 @@ where
         })?;
 
         self.update_state()
+    }
+
+    pub fn send_command<'a, C, D>(&'a mut self, command: C, data: D) -> Result<&'a mut Self, Box<Error>>
+    where
+        C: ToString,
+        D: ToString,
+    {
+        use protocol::client::Command;
+
+        self.send_packet(Command {
+            com: command.to_string(),
+            data: data.to_string()
+        })?;
+
+        self.update_state()
+    }
+}
+
+#[cfg(feature = "admin")]
+impl<P: Protocol> Client<P> 
+where
+    P::SerializeError: 'static,
+    P::DeserializeError: 'static,
+{
+    pub fn teleport<'a>(&'a mut self, dest: Position) -> Result<&'a mut Self, Box<Error>> {
+        self.teleport_other(0, dest)
+    }
+
+    pub fn teleport_other<'a>(&'a mut self, other: u16, dest: Position) -> Result<&'a mut Self, Box<Error>> {
+        self.send_command(
+            "teleport",
+            format!("{} {} {}", 
+                other, 
+                dest.x.inner() as i32, 
+                dest.y.inner() as i32
+            )
+        )
     }
 }
 

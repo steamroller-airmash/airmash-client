@@ -5,6 +5,10 @@ authors = ["STEAMROLLER"]
 publish = false
 license = "Apache-2.0 OR MIT"
 
+[features]
+admin = []
+default = ["admin"]
+
 [replace]
 # Use the github version for now
 "airmash-protocol:0.2.2" = { git="https://github.com/steamroller-airmash/airmash-protocol-rs" }
