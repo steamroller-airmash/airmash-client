@@ -1,0 +1,13 @@
+[package]
+name = "airmash-client"
+version = "0.0.0"
+authors = ["STEAMROLLER"]
+publish = false
+license = "Apache-2.0 OR MIT"
+
+[dependencies]
+fnv = "*"
+ws = "*"
+airmash-protocol = "0.2"
+airmash-protocol-v5 = "0.0"
+log = "*"
