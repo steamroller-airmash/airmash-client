@@ -89,12 +89,24 @@ impl GameState {
         self.game_ty = packet.ty;
     }
 
+    fn handle_chat_vote_muted(&mut self) {
+        self.players.get_mut(&self.me.id)
+            .expect("The current player doesn't exist!")
+            .votemuted = true;
+    }
+    fn handle_chate_vote_mute_passed(&mut self, packet: &ChatVoteMutePassed) {
+        self.players.get_mut(&packet.id)
+            .map(|x| x.votemuted = false);
+    }
+
     /// Handle a packet from the server
     pub(crate) fn update_state(&mut self, packet: &ServerPacket) {
         use self::ServerPacket::*;
 
         match packet {
             Login(p) => self.handle_login(p),
+            ChatVoteMuted => self.handle_chat_vote_muted(),
+            ChatVoteMutePassed(p) => self.handle_chate_vote_mute_passed(p),
             _ => (),
         }
     }
