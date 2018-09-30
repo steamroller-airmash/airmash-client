@@ -197,6 +197,19 @@ where
 
         self.update_state()
     }
+
+    pub fn say<'a, S>(&'a mut self, message: S) -> Result<&'a mut Self, Box<Error>>
+    where
+        S: ToString
+    {
+        use protocol::client::Chat;
+
+        self.send_packet(Chat {
+            text: (&message).to_string(),
+        })?;
+
+        self.update_state()
+    }
 }
 
 impl Client<ProtocolV5> {
