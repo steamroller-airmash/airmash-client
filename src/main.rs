@@ -19,7 +19,7 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
 }
 
 fn main() {
-    simple_logger::init_with_level(log::Level::Info);
+    simple_logger::init_with_level(log::Level::Info).unwrap();
 
     if let Err(e) = run_bot("TESTBOT", "wss://game.airmash.steamroller.tk/dev") {
         println!("An error occurred:\n{}", e);
