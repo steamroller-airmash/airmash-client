@@ -1,4 +1,4 @@
-use protocol::{ClientPacket, ServerPacket, Protocol, Position};
+use protocol::{ClientPacket, ServerPacket, Protocol, Position, KeyCode};
 use protocol_v5::ProtocolV5;
 
 use std::error::Error;
@@ -8,6 +8,7 @@ use std::thread::{self, spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
 use gamestate::GameState;
+use error::AbortError;
 use message_handler::*;
 use received_message::{ReceivedMessage, ReceivedMessageData};
 
@@ -22,6 +23,7 @@ pub struct Client<P: Protocol> {
     last_update: Instant,
     protocol: P,
     closed: bool,
+    key_seq: u32,
     pub state: GameState,
 }
 
@@ -60,6 +62,7 @@ where
             sender: sender,
             protocol,
             closed: false,
+            key_seq: 0,
             state: GameState::default(),
         })
     }
@@ -85,6 +88,10 @@ where
         let iter = self.packets.try_iter().filter(|x| x.time < frame_end).collect::<Vec<_>>();
 
         for msg in iter {
+            if msg.is_close() {
+                Err(AbortError)?;
+            }
+
             if let Ok(packet) = msg.as_packet(&self.protocol) {
                 self.state.update_state(&packet);
                 self.handle_packet(&packet)?;
@@ -102,7 +109,9 @@ where
         let now = Instant::now();
 
         while now - self.last_update > FRAME_TIME {
+            use protocol::client::Ack;
             self.update_state_once()?;
+            self.send_packet(Ack)?;
         }
 
         Ok(self)
@@ -196,7 +205,12 @@ where
     }
 
     pub fn wait<'a>(&'a mut self, duration: Duration) -> Result<&'a mut Self, Box<Error>> {
-        thread::sleep(duration);
+        let end_time = Instant::now() + duration;
+
+        while end_time > Instant::now() {
+            thread::sleep(Duration::from_millis(500));
+            self.update_state()?;
+        }
 
         self.update_state()
     }
@@ -240,6 +254,37 @@ where
         })?;
 
         self.update_state()
+    }
+
+    pub fn change_flag<'a, F>(&'a mut self, flag: F) -> Result<&'a mut Self, Box<Error>>
+    where
+        F: ToString
+    {
+        self.send_command("flag", flag.to_string())
+    }
+
+    pub fn set_key<'a>(&'a mut self, keycode: KeyCode, state: bool) -> Result<&'a mut Self, Box<Error>> {
+        use protocol::client::Key;
+
+        let packet = Key {
+            key: keycode,
+            seq: self.key_seq,
+            state
+        };
+
+        self.key_seq += 1;
+
+        self.send_packet(packet)?;
+
+        self.update_state()
+    }
+
+    pub fn press_key<'a>(&'a mut self, keycode: KeyCode) -> Result<&'a mut Self, Box<Error>> {
+        self.set_key(keycode, true)
+    }
+    
+    pub fn release_key<'a>(&'a mut self, keycode: KeyCode) -> Result<&'a mut Self, Box<Error>> {
+        self.set_key(keycode, false)
     }
 }
 

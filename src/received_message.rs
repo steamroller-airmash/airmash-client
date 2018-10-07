@@ -17,6 +17,13 @@ pub(crate) enum ReceivedMessageData {
 }
 
 impl ReceivedMessage {
+    pub fn is_close(&self) -> bool {
+        match self.data {
+            ReceivedMessageData::Close => true,
+            _ => false
+        }
+    }
+
     pub fn as_packet<P>(&self, protocol: &P) -> Result<ServerPacket, PacketDeserializeError<P>>
     where
         P: Protocol,
