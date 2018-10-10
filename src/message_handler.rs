@@ -44,6 +44,7 @@ impl Handler for MessageHandler {
     }
 
     fn on_close(&mut self, _: CloseCode, _: &str) {
+        info!("sent close");
         self.channel
             .send(ReceivedMessage {
                 time: Instant::now(),
