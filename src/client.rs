@@ -89,6 +89,8 @@ where
 
         for msg in iter {
             if msg.is_close() {
+                self.closed = true;
+                info!("received close");
                 Err(AbortError)?;
             }
 
@@ -208,7 +210,7 @@ where
         let end_time = Instant::now() + duration;
 
         while end_time > Instant::now() {
-            thread::sleep(Duration::from_millis(500));
+            thread::sleep(Duration::from_millis(16));
             self.update_state()?;
         }
 
@@ -321,10 +323,16 @@ impl Client<ProtocolV5> {
 
 impl<P: Protocol> Drop for Client<P> {
     fn drop(&mut self) {
+        for msg in self.packets.try_iter() {
+            if msg.is_close() {
+                self.closed = true;
+            }
+        }
+
         if !self.closed {
             self.sender
                 .close(CloseCode::Normal)
-                .expect("Failed to send close message!");
+                .err();
         }
 
         mem::replace(&mut self.message_thread, None).map(|x| x.join().unwrap());

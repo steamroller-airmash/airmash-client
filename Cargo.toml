@@ -16,6 +16,8 @@ default = ["admin"]
 [dependencies]
 fnv = "*"
 ws = { version = "*", features=["ssl"] }
+tokio = "*"
+tokio-timer = "*"
 airmash-protocol = "0.2"
 airmash-protocol-v5 = "0.0"
 log = "*"

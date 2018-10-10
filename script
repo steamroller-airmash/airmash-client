@@ -1,3 +1,3 @@
-for i in `seq 1 1000`; do
-    ./target/release/airmash-client &
+for i in `seq 1 500`; do
+    ./target/release/airmash-client > /dev/null &2> /dev/null &
 done
