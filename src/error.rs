@@ -4,13 +4,67 @@ use ws::{Error as WsError, ErrorKind};
 
 use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Display, Error as FmtError, Formatter};
+use std::fmt::{Debug, Display, Error as FmtError, Formatter};
 
-#[derive(Copy, Clone, Debug)]
+use tokio_timer::Error as TimerError;
+
+#[derive(Derivative)]
+#[derivative(Debug(bound = "P::SerializeError: Debug"))]
+pub enum ClientError<P>
+where
+    P: Protocol,
+{
+    Deserialization(PacketDeserializeError<P>),
+    Serialization(PacketSerializeError<P>),
+    Timer(TimerError),
+    WsError(WsError),
+}
+
+impl<P> From<TimerError> for ClientError<P>
+where
+    P: Protocol,
+{
+    fn from(e: TimerError) -> Self {
+        ClientError::Timer(e)
+    }
+}
+
+impl<P> From<PacketSerializeError<P>> for ClientError<P>
+where
+    P: Protocol,
+{
+    fn from(e: PacketSerializeError<P>) -> Self {
+        ClientError::Serialization(e)
+    }
+}
+
+impl<P> From<WsError> for ClientError<P>
+where
+    P: Protocol,
+{
+    fn from(e: WsError) -> Self {
+        ClientError::WsError(e)
+    }
+}
+
+impl<P: Protocol> Display for ClientError<P> {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), FmtError> {
+        write!(fmt, "{:?}", self)
+    }
+}
+
+impl<P: Protocol> Error for ClientError<P> {}
+
+#[derive(Copy, Clone, Derivative)]
+#[derivative(Debug(bound = "P::DeserializeError: Debug"))]
 pub enum PacketDeserializeError<P: Protocol> {
     NotABinaryPacket,
     InvalidPacket(P::DeserializeError),
 }
+
+#[derive(Copy, Clone, Derivative)]
+#[derivative(Debug(bound = "P::SerializeError: Debug"))]
+pub struct PacketSerializeError<P: Protocol>(pub P::SerializeError);
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct AbortError;

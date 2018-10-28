@@ -20,7 +20,7 @@ impl ReceivedMessage {
     pub fn is_close(&self) -> bool {
         match self.data {
             ReceivedMessageData::Close => true,
-            _ => false
+            _ => false,
         }
     }
 

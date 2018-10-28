@@ -9,16 +9,14 @@ license = "Apache-2.0 OR MIT"
 admin = []
 default = ["admin"]
 
-[replace]
-# Use the github version for now
-"airmash-protocol:0.2.2" = { git="https://github.com/steamroller-airmash/airmash-protocol-rs" }
-
 [dependencies]
 fnv = "*"
 ws = { version = "*", features=["ssl"] }
 tokio = "*"
 tokio-timer = "*"
+futures = "*"
 airmash-protocol = "0.2"
 airmash-protocol-v5 = "0.0"
 log = "*"
 simple_logger = "*"
+derivative = "*"

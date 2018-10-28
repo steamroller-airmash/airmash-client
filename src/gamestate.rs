@@ -166,5 +166,5 @@ impl GameState {
     }
 
     /// Update game state given that a frame has passed
-    pub(crate) fn update_frame(&mut self, now: Instant) {}
+    pub(crate) fn update_frame(&mut self, _now: Instant) {}
 }
