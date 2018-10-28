@@ -1,9 +1,9 @@
-use ws::{self, CloseCode, Handler, Handshake, Message, Result};
+use ws::{self, CloseCode, Error as WsError, ErrorKind, Handler, Handshake, Message, Result};
 
-use std::sync::mpsc::Sender;
+use futures::sync::mpsc::UnboundedSender as Sender;
+
 use std::time::Instant;
 
-use error::AbortError;
 use received_message::*;
 
 use self::ReceivedMessageData::*;
@@ -15,17 +15,20 @@ struct MessageHandler {
 
 impl Handler for MessageHandler {
     fn on_open(&mut self, _: Handshake) -> Result<()> {
-        let result = self.channel.send(ReceivedMessage {
+        let result = self.channel.unbounded_send(ReceivedMessage {
             time: Instant::now(),
             data: Open(self.sender.clone()),
         });
 
-        result.map_err(|_| AbortError.into())
+        result.map_err(|e| WsError {
+            details: e.to_string().into(),
+            kind: ErrorKind::Custom(e.into()),
+        })
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
         let result = match msg {
-            Message::Binary(v) => self.channel.send(ReceivedMessage {
+            Message::Binary(v) => self.channel.unbounded_send(ReceivedMessage {
                 time: Instant::now(),
                 data: Binary(v),
             }),
@@ -40,17 +43,20 @@ impl Handler for MessageHandler {
             }
         };
 
-        result.map_err(|_| AbortError.into())
+        result.map_err(|e| WsError {
+            details: e.to_string().into(),
+            kind: ErrorKind::Custom(e.into()),
+        })
     }
 
     fn on_close(&mut self, _: CloseCode, _: &str) {
         info!("sent close");
         self.channel
-            .send(ReceivedMessage {
+            .unbounded_send(ReceivedMessage {
                 time: Instant::now(),
                 data: Close,
             })
-            .ok();
+            .unwrap();
     }
 }
 

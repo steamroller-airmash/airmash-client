@@ -1,249 +1,400 @@
-use protocol::{ClientPacket, ServerPacket, Protocol, Position, KeyCode};
+use futures::sync::mpsc::{unbounded, UnboundedReceiver as Receiver};
+use futures::{Future, Stream};
+use tokio::timer::Interval;
+
+use protocol::{ClientPacket, KeyCode, Protocol, ServerPacket, PlaneType};
 use protocol_v5::ProtocolV5;
 
-use std::error::Error;
+use ws::Sender;
+
+use std::borrow::Borrow;
 use std::mem;
-use std::sync::mpsc::{channel, Receiver};
-use std::thread::{self, spawn, JoinHandle};
+use std::sync::{Arc, Mutex};
+use std::thread::{spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
+use error::{ClientError, PacketSerializeError};
 use gamestate::GameState;
-use error::AbortError;
-use message_handler::*;
+use message_handler::websocket_runner;
 use received_message::{ReceivedMessage, ReceivedMessageData};
-
-use ws::{CloseCode, Sender};
 
 const FRAME_TIME: Duration = Duration::from_nanos(16666667);
 
-pub struct Client<P: Protocol> {
-    message_thread: Option<JoinHandle<()>>,
-    packets: Receiver<ReceivedMessage>,
-    sender: Sender,
-    last_update: Instant,
-    protocol: P,
-    closed: bool,
-    key_seq: u32,
-    pub state: GameState,
+enum InternalEvent {
+    Frame(Instant),
+    Packet(ReceivedMessage),
 }
 
-impl<P: Protocol> Client<P>
-where
-    P::SerializeError: 'static,
-    P::DeserializeError: 'static,
-{
+#[derive(Clone, Debug)]
+pub enum ClientEventData {
+    Frame,
+    Packet(ServerPacket),
+    Close,
+}
+
+#[derive(Clone)]
+pub struct ClientEvent<P: Protocol> {
+    pub inst: Instant,
+    pub data: ClientEventData,
+    pub base: Arc<ClientBase<P>>,
+    pub state: Arc<Mutex<GameState>>,
+    pub key_seq: Arc<Mutex<u32>>,
+}
+
+pub struct ClientBase<P: Protocol> {
+    #[allow(dead_code)]
+    message_thread: JoinHandle<()>,
+    sender: Sender,
+    pub protocol: P,
+}
+
+fn build_select_stream<P: Protocol>(
+    channel: Receiver<ReceivedMessage>,
+) -> impl Stream<Item = InternalEvent, Error = ClientError<P>> {
+    let timer_stream = Interval::new(Instant::now(), FRAME_TIME)
+        .map(InternalEvent::Frame)
+        .map_err(|e| -> ClientError<P> { e.into() });
+    let message_stream = channel
+        .map(InternalEvent::Packet)
+        .map_err(|_| -> ClientError<P> { unimplemented!() });
+
+    timer_stream.select(message_stream)
+}
+
+fn build_client_stream(
+    addr: String,
+) -> Result<
+    impl Stream<Item = ClientEvent<ProtocolV5>, Error = ClientError<ProtocolV5>>,
+    ClientError<ProtocolV5>,
+> {
+    use self::ClientEventData::*;
+
+    let (client, channel) = ClientBase::<ProtocolV5>::new(addr)?;
+    let gamestate = Arc::new(Mutex::new(GameState::default()));
+    let client = Arc::new(client);
+    let key_seq = Arc::new(Mutex::new(0));
+
+    let select_stream = build_select_stream(channel);
+
+    Ok(select_stream
+        .filter_map(move |val| {
+            let (data, inst) = {
+                let lock = gamestate.lock();
+                let ref mut gamestate = lock.unwrap();
+
+                match &val {
+                    InternalEvent::Packet(p) => {
+                        if p.is_close() {
+                            (Close, p.time)
+                        } else {
+                            match p.as_packet(&client.protocol) {
+                                Ok(sp) => {
+                                    gamestate.update_state(&sp);
+                                    (Packet(sp), p.time)
+                                }
+                                Err(_) => return None,
+                            }
+                        }
+                    }
+                    InternalEvent::Frame(i) => {
+                        gamestate.update_frame(*i);
+                        (Frame, *i)
+                    }
+                }
+            };
+
+            return Some(ClientEvent {
+                inst: inst,
+                data: data,
+                base: Arc::clone(&client),
+                state: Arc::clone(&gamestate),
+                key_seq: Arc::clone(&key_seq),
+            });
+        })
+        .take_while(move |evt| {
+            Ok(match evt.data {
+                Close => false,
+                _ => true,
+            })
+        })
+        .and_then(|evt| {
+            use self::ClientEventData::*;
+            use protocol::client::Pong;
+            use protocol::ServerPacket::Ping;
+
+            if let Packet(ref packet) = evt.data {
+                if let Ping(p) = packet {
+                    evt.base.send_packet(Pong { num: p.num })?;
+                }
+            }
+
+            Ok(evt)
+        }))
+}
+
+impl<P: Protocol + 'static> ClientBase<P> {
     fn create_event_thread(addr: String) -> (JoinHandle<()>, Receiver<ReceivedMessage>) {
-        let (message_send, message_recv) = channel();
+        let (message_send, message_recv) = unbounded();
         let handle = spawn(move || websocket_runner(addr, message_send));
 
         (handle, message_recv)
     }
 
-    pub fn with_protocol<S>(addr: S, protocol: P) -> Result<Self, Box<Error>>
-    where
-        S: ToString,
-    {
-        use self::ReceivedMessageData::Open;
+    fn build_with_protocol(
+        addr: String,
+        protocol: P,
+    ) -> Result<(Self, Receiver<ReceivedMessage>), ClientError<P>> {
+        let (handle, channel) = Self::create_event_thread(addr);
 
-        let (handle, channel) = Self::create_event_thread(addr.to_string());
+        let mut wait = channel.wait();
 
-        let sender = match channel.recv()?.data {
-            Open(sender) => sender,
+        let sender = match wait.next().unwrap().unwrap().data {
+            ReceivedMessageData::Open(sender) => sender,
             // If this actually happens we have a big problem.
             // Somehow we managed to close the websocket or
             // receive a message before opening the websocket.
             _ => unreachable!(),
         };
 
-        Ok(Self {
-            message_thread: Some(handle),
-            packets: channel,
-            last_update: Instant::now(),
-            sender: sender,
-            protocol,
-            closed: false,
-            key_seq: 0,
-            state: GameState::default(),
-        })
-    }
+        let channel = wait.into_inner();
 
-    fn handle_packet(&mut self, packet: &ServerPacket) -> Result<(), Box<Error>> {
-        use self::ServerPacket::*;
-        use protocol::client::Pong;
-
-        match packet {
-            Ping(ping) => {
-                self.send_packet(Pong {
-                    num: ping.num,
-                })?;
+        Ok((
+            Self {
+                message_thread: handle,
+                sender,
+                protocol,
             },
-            _ => ()
-        };
-
-        Ok(())
+            channel,
+        ))
     }
 
-    fn update_state_once(&mut self) -> Result<(), Box<Error>> {
-        let frame_end = self.last_update + FRAME_TIME;
-        let iter = self.packets.try_iter().filter(|x| x.time < frame_end).collect::<Vec<_>>();
-
-        for msg in iter {
-            if msg.is_close() {
-                self.closed = true;
-                info!("received close");
-                Err(AbortError)?;
-            }
-
-            if let Ok(packet) = msg.as_packet(&self.protocol) {
-                self.state.update_state(&packet);
-                self.handle_packet(&packet)?;
-            }
-        }
-
-        self.state.update_frame(frame_end);
-
-        self.last_update = frame_end;
-
-        Ok(())
-    }
-
-    pub fn update_state<'a>(&'a mut self) -> Result<&'a mut Self, Box<Error>> {
-        let now = Instant::now();
-
-        while now - self.last_update > FRAME_TIME {
-            use protocol::client::Ack;
-            self.update_state_once()?;
-            self.send_packet(Ack)?;
-        }
-
-        Ok(self)
-    }
-
-    fn send_ws_frame<'a>(&'a mut self, frame: Vec<u8>) -> Result<(), Box<Error>> {
+    fn send_ws_frame(&self, frame: Vec<u8>) -> Result<(), ClientError<P>> {
         self.sender.send(frame)?;
 
         Ok(())
     }
 
-    pub fn send_packet_ref<'a>(
-        &'a mut self,
-        packet: &ClientPacket,
-    ) -> Result<&'a mut Self, Box<Error>> {
-        for frame in self.protocol.serialize_client(packet)? {
+    pub fn send_packet_ref(&self, packet: &ClientPacket) -> Result<(), ClientError<P>> {
+        for frame in self
+            .protocol
+            .serialize_client(packet)
+            .map_err(PacketSerializeError)?
+        {
             self.send_ws_frame(frame)?;
         }
 
-        Ok(self)
+        Ok(())
     }
 
-    pub fn send_packet<'a, C>(&'a mut self, packet: C) -> Result<&'a mut Self, Box<Error>>
+    pub fn send_packet<C>(&self, packet: C) -> Result<(), ClientError<P>>
     where
         C: Into<ClientPacket>,
     {
         self.send_packet_ref(&packet.into())
     }
+}
 
-    pub fn login_with_session_and_horizon<'a>(
-        &'a mut self,
+impl ClientBase<ProtocolV5> {
+    fn new(addr: String) -> Result<(Self, Receiver<ReceivedMessage>), ClientError<ProtocolV5>> {
+        Self::build_with_protocol(addr, ProtocolV5 {})
+    }
+}
+
+pub struct Client<S> {
+    inner: S,
+}
+
+impl Client<()> {
+    pub fn new<'a, S>(
+        addr: &'a S,
+    ) -> Result<
+        Client<impl Stream<Item = ClientEvent<ProtocolV5>, Error = ClientError<ProtocolV5>>>,
+        ClientError<ProtocolV5>,
+    >
+    where
+        S: ToOwned<Owned = String> + ?Sized,
+        String: Borrow<S>,
+    {
+        let s: String = addr.to_owned();
+
+        Ok(Client {
+            inner: build_client_stream(s)?,
+        })
+    }
+}
+
+impl<S, P> Client<S>
+where
+    P: Protocol + 'static,
+    S: Stream<Item = ClientEvent<P>, Error = ClientError<P>>,
+{
+    pub fn from_stream(stream: S) -> Self {
+        Self { inner: stream }
+    }
+
+    pub fn login_with_session_and_horizon(
+        self,
         name: String,
         flag: String,
         session: Option<String>,
         horizon_x: u16,
         horizon_y: u16,
-    ) -> Result<&'a mut Self, Box<Error>> {
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    where
+        Self: Sized,
+    {
         use protocol::client::Login;
 
         let packet = Login {
-            name: name.to_owned(),
-            flag: flag.to_owned(),
+            name: name,
+            flag: flag,
             session: session.unwrap_or("none".to_owned()),
-            protocol: self.protocol.version(),
+            // Will get updated later
+            protocol: 0,
 
             // These are usually ignored by the server
             horizon_x: horizon_x,
             horizon_y: horizon_y,
         };
 
-        self.send_packet(packet)
+        self.send_packet_with_cb(packet, |p, evt| p.protocol = evt.base.protocol.version())
     }
 
-    pub fn login_with_session<'a, N, S, F>(
-        &'a mut self,
-        name: N,
-        flag: F,
-        session: S,
-    ) -> Result<&'a mut Self, Box<Error>>
+    pub fn login_with_session<N, X, F>(
+        self,
+        name: &N,
+        flag: &F,
+        session: X,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
-        N: ToString,
-        S: Into<Option<String>>,
-        F: ToString,
+        Self: Sized,
+        N: ToOwned<Owned = String> + ?Sized,
+        X: Into<Option<String>>,
+        F: ToOwned<Owned = String> + ?Sized,
+        String: Borrow<N> + Borrow<F>,
     {
         self.login_with_session_and_horizon(
-            name.to_string(),
-            flag.to_string(),
+            name.to_owned(),
+            flag.to_owned(),
             session.into(),
             4500,
             4500,
         )
     }
 
-    pub fn login<'a, N, F>(&'a mut self, name: N, flag: F) -> Result<&'a mut Self, Box<Error>>
+    pub fn login<N, F>(
+        self,
+        name: &N,
+        flag: &F,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
-        N: ToString,
-        F: ToString,
+        Self: Sized,
+        N: ToOwned<Owned = String> + ?Sized,
+        F: ToOwned<Owned = String> + ?Sized,
+        String: Borrow<N> + Borrow<F>,
     {
-        self.login_with_session(name.to_string(), flag.to_string(), None)
+        self.login_with_session(name, flag, None)
     }
 
-    pub fn disconnect<'a>(&'a mut self) -> Result<&'a mut Self, Box<Error>> {
-        self.update_state()?;
-
-        self.sender
-            .close(CloseCode::Normal)
-            .expect("Failed to close connection!");
-        self.closed = true;
-
-        Ok(self)
-    }
-
-    pub fn wait<'a>(&'a mut self, duration: Duration) -> Result<&'a mut Self, Box<Error>> {
-        let end_time = Instant::now() + duration;
-
-        while end_time > Instant::now() {
-            thread::sleep(Duration::from_millis(16));
-            self.update_state()?;
-        }
-
-        self.update_state()
-    }
-
-    pub fn chat<'a, S>(&'a mut self, message: S) -> Result<&'a mut Self, Box<Error>>
+    pub fn send_packet<I>(
+        self,
+        packet: I,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
-        S: ToString,
+        I: Into<ClientPacket> + Send + 'static,
+    {
+        let mut packet = Some(packet);
+
+        Client {
+            inner: self.inner.inspect(move |evt| {
+                if packet.is_none() {
+                    return;
+                }
+
+                let p = mem::replace(&mut packet, None).unwrap();
+                evt.base.send_packet(p).unwrap();
+            }),
+        }
+    }
+
+    pub fn send_packet_with_cb<I, F>(
+        self,
+        packet: I,
+        cb: F,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    where
+        I: Into<ClientPacket> + Send + 'static,
+        F: FnOnce(&mut I, &ClientEvent<P>) -> (),
+    {
+        let mut packet = Some(packet);
+        let mut cb = Some(cb);
+
+        Client {
+            inner: self.inner.inspect(move |evt| {
+                if packet.is_none() {
+                    return;
+                }
+
+                let mut p = mem::replace(&mut packet, None).unwrap();
+                let cb = mem::replace(&mut cb, None).unwrap();
+
+                cb(&mut p, evt);
+
+                evt.base.send_packet(p).unwrap();
+            }),
+        }
+    }
+
+    pub fn wait(
+        self,
+        duration: Duration,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+        let mut end = None;
+
+        Client {
+            inner: self.inner.skip_while(move |evt| {
+                if end.is_none() {
+                    end = Some(Instant::now() + duration);
+                }
+
+                Ok(evt.inst < end.unwrap())
+            }),
+        }
+    }
+
+    pub fn chat<C>(
+        self,
+        message: C,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    where
+        C: ToString,
     {
         use protocol::client::Chat;
 
         self.send_packet(Chat {
-            text: (&message).to_string(),
-        })?;
-
-        self.update_state()
+            text: message.to_string(),
+        })
     }
 
-    pub fn say<'a, S>(&'a mut self, message: S) -> Result<&'a mut Self, Box<Error>>
+    pub fn say<C>(
+        self,
+        message: C,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
-        S: ToString,
+        C: ToString,
     {
         use protocol::client::Say;
 
         self.send_packet(Say {
-            text: (&message).to_string(),
-        })?;
-
-        self.update_state()
+            text: message.to_string(),
+        })
     }
 
-    pub fn send_command<'a, C, D>(&'a mut self, command: C, data: D) -> Result<&'a mut Self, Box<Error>>
+    pub fn send_command<C, D>(
+        self,
+        command: C,
+        data: D,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         C: ToString,
         D: ToString,
@@ -252,89 +403,101 @@ where
 
         self.send_packet(Command {
             com: command.to_string(),
-            data: data.to_string()
-        })?;
-
-        self.update_state()
+            data: data.to_string(),
+        })
     }
 
-    pub fn change_flag<'a, F>(&'a mut self, flag: F) -> Result<&'a mut Self, Box<Error>>
+    pub fn change_flag<F>(
+        self,
+        flag: F,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
-        F: ToString
+        F: ToString,
     {
-        self.send_command("flag", flag.to_string())
+        self.send_command("flag", flag)
     }
 
-    pub fn set_key<'a>(&'a mut self, keycode: KeyCode, state: bool) -> Result<&'a mut Self, Box<Error>> {
+    pub fn enter_spectate(
+        self
+    )-> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+        self.send_command("spectate", "-1")
+    }
+
+    pub fn disconnect(self) -> impl Future<Item = (), Error = ClientError<P>> {
+        self.inner
+            .take_while(|_| {
+                info!("Disconnected!");
+                Ok(false)
+            })
+            .into_future()
+            .map(|_| ())
+            .map_err(|(e, _)| e)
+    }
+
+    pub fn set_key(
+        self,
+        keycode: KeyCode,
+        state: bool,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         use protocol::client::Key;
 
         let packet = Key {
             key: keycode,
-            seq: self.key_seq,
-            state
+            seq: 0,
+            state,
         };
 
-        self.key_seq += 1;
+        self.send_packet_with_cb(packet, |p, evt| {
+            let mut key_seq = evt.key_seq.lock().unwrap();
 
-        self.send_packet(packet)?;
-
-        self.update_state()
+            p.seq = *key_seq;
+            *key_seq += 1;
+        })
     }
 
-    pub fn press_key<'a>(&'a mut self, keycode: KeyCode) -> Result<&'a mut Self, Box<Error>> {
+    pub fn press_key(
+        self,
+        keycode: KeyCode,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         self.set_key(keycode, true)
     }
-    
-    pub fn release_key<'a>(&'a mut self, keycode: KeyCode) -> Result<&'a mut Self, Box<Error>> {
+    pub fn release_key(
+        self,
+        keycode: KeyCode,
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         self.set_key(keycode, false)
     }
-}
 
-#[cfg(feature = "admin")]
-impl<P: Protocol> Client<P> 
-where
-    P::SerializeError: 'static,
-    P::DeserializeError: 'static,
-{
-    pub fn teleport<'a>(&'a mut self, dest: Position) -> Result<&'a mut Self, Box<Error>> {
-        self.teleport_other(0, dest)
+    pub fn switch_plane(
+        self,
+        plane: PlaneType
+    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+        self.send_command("respawn", (plane as u8).to_string())
     }
 
-    pub fn teleport_other<'a>(&'a mut self, other: u16, dest: Position) -> Result<&'a mut Self, Box<Error>> {
-        self.send_command(
-            "teleport",
-            format!("{} {} {}", 
-                other, 
-                dest.x.inner() as i32, 
-                dest.y.inner() as i32
-            )
-        )
+    pub fn into_inner(self) -> S {
+        self.inner
     }
-}
 
-impl Client<ProtocolV5> {
-    pub fn new<S>(addr: S) -> Result<Self, Box<Error>>
+    pub fn into_boxed(self) -> Client<Box<Stream<Item = ClientEvent<P>, Error = ClientError<P>> + Sync + Send>> 
     where
-        S: ToString,
+        S: Sync + Send + 'static
     {
-        Self::with_protocol(addr, ProtocolV5)
+        Client {
+            inner: Box::new(self.inner)
+        }
     }
 }
 
-impl<P: Protocol> Drop for Client<P> {
-    fn drop(&mut self) {
-        for msg in self.packets.try_iter() {
-            if msg.is_close() {
-                self.closed = true;
-            }
-        }
+impl<S, P> Stream for Client<S>
+where
+    P: Protocol + 'static,
+    S: Stream<Item = ClientEvent<P>, Error = ClientError<P>>,
+{
+    type Item = S::Item;
+    type Error = S::Error;
 
-        if !self.closed {
-            self.sender
-                .close(CloseCode::Normal)
-                .err();
-        }
-
-        mem::replace(&mut self.message_thread, None).map(|x| x.join().unwrap());
+    fn poll(&mut self) -> Result<::futures::Async<Option<S::Item>>, S::Error> {
+        self.inner.poll()
     }
 }
