@@ -2,18 +2,19 @@ use futures::sync::mpsc::{unbounded, UnboundedReceiver as Receiver};
 use futures::{Future, Stream};
 use tokio::timer::Interval;
 
-use protocol::{ClientPacket, KeyCode, Protocol, ServerPacket, PlaneType};
+use protocol::{ClientPacket, KeyCode, PlaneType, Protocol, ServerPacket};
 use protocol_v5::ProtocolV5;
 
 use ws::Sender;
 
 use std::borrow::Borrow;
 use std::mem;
+use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
-use error::{ClientError, PacketSerializeError};
+use error::{ClientError, PacketSerializeError, AbortError};
 use gamestate::GameState;
 use message_handler::websocket_runner;
 use received_message::{ReceivedMessage, ReceivedMessageData};
@@ -38,13 +39,13 @@ pub struct ClientEvent<P: Protocol> {
     pub data: ClientEventData,
     pub base: Arc<ClientBase<P>>,
     pub state: Arc<Mutex<GameState>>,
-    pub key_seq: Arc<Mutex<u32>>,
+    pub key_seq: Arc<AtomicUsize>,
 }
 
 pub struct ClientBase<P: Protocol> {
     #[allow(dead_code)]
     message_thread: JoinHandle<()>,
-    sender: Sender,
+    pub sender: Sender,
     pub protocol: P,
 }
 
@@ -56,7 +57,7 @@ fn build_select_stream<P: Protocol>(
         .map_err(|e| -> ClientError<P> { e.into() });
     let message_stream = channel
         .map(InternalEvent::Packet)
-        .map_err(|_| -> ClientError<P> { unimplemented!() });
+        .map_err(|_| -> ClientError<P> { AbortError.into() });
 
     timer_stream.select(message_stream)
 }
@@ -72,7 +73,7 @@ fn build_client_stream(
     let (client, channel) = ClientBase::<ProtocolV5>::new(addr)?;
     let gamestate = Arc::new(Mutex::new(GameState::default()));
     let client = Arc::new(client);
-    let key_seq = Arc::new(Mutex::new(0));
+    let key_seq = Arc::new(ATOMIC_USIZE_INIT);
 
     let select_stream = build_select_stream(channel);
 
@@ -147,8 +148,12 @@ impl<P: Protocol + 'static> ClientBase<P> {
         let (handle, channel) = Self::create_event_thread(addr);
 
         let mut wait = channel.wait();
+        let msg = match wait.next() {
+            Some(Ok(x)) => x,
+            _ => panic!("Unexpected message!"),
+        };
 
-        let sender = match wait.next().unwrap().unwrap().data {
+        let sender = match msg.data {
             ReceivedMessageData::Open(sender) => sender,
             // If this actually happens we have a big problem.
             // Somehow we managed to close the websocket or
@@ -192,6 +197,7 @@ impl<P: Protocol + 'static> ClientBase<P> {
     {
         self.send_packet_ref(&packet.into())
     }
+
 }
 
 impl ClientBase<ProtocolV5> {
@@ -200,15 +206,15 @@ impl ClientBase<ProtocolV5> {
     }
 }
 
-pub struct Client<S> {
+pub struct ClientStream<S> {
     inner: S,
 }
 
-impl Client<()> {
+impl ClientStream<()> {
     pub fn new<'a, S>(
         addr: &'a S,
     ) -> Result<
-        Client<impl Stream<Item = ClientEvent<ProtocolV5>, Error = ClientError<ProtocolV5>>>,
+        ClientStream<impl Stream<Item = ClientEvent<ProtocolV5>, Error = ClientError<ProtocolV5>>>,
         ClientError<ProtocolV5>,
     >
     where
@@ -217,13 +223,13 @@ impl Client<()> {
     {
         let s: String = addr.to_owned();
 
-        Ok(Client {
+        Ok(ClientStream {
             inner: build_client_stream(s)?,
         })
     }
 }
 
-impl<S, P> Client<S>
+impl<S, P> ClientStream<S>
 where
     P: Protocol + 'static,
     S: Stream<Item = ClientEvent<P>, Error = ClientError<P>>,
@@ -239,7 +245,7 @@ where
         session: Option<String>,
         horizon_x: u16,
         horizon_y: u16,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         Self: Sized,
     {
@@ -265,7 +271,7 @@ where
         name: &N,
         flag: &F,
         session: X,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         Self: Sized,
         N: ToOwned<Owned = String> + ?Sized,
@@ -286,7 +292,7 @@ where
         self,
         name: &N,
         flag: &F,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         Self: Sized,
         N: ToOwned<Owned = String> + ?Sized,
@@ -299,13 +305,13 @@ where
     pub fn send_packet<I>(
         self,
         packet: I,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         I: Into<ClientPacket> + Send + 'static,
     {
         let mut packet = Some(packet);
 
-        Client {
+        ClientStream {
             inner: self.inner.inspect(move |evt| {
                 if packet.is_none() {
                     return;
@@ -321,7 +327,7 @@ where
         self,
         packet: I,
         cb: F,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         I: Into<ClientPacket> + Send + 'static,
         F: FnOnce(&mut I, &ClientEvent<P>) -> (),
@@ -329,7 +335,7 @@ where
         let mut packet = Some(packet);
         let mut cb = Some(cb);
 
-        Client {
+        ClientStream {
             inner: self.inner.inspect(move |evt| {
                 if packet.is_none() {
                     return;
@@ -348,10 +354,10 @@ where
     pub fn wait(
         self,
         duration: Duration,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         let mut end = None;
 
-        Client {
+        ClientStream {
             inner: self.inner.skip_while(move |evt| {
                 if end.is_none() {
                     end = Some(Instant::now() + duration);
@@ -365,7 +371,7 @@ where
     pub fn chat<C>(
         self,
         message: C,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         C: ToString,
     {
@@ -379,7 +385,7 @@ where
     pub fn say<C>(
         self,
         message: C,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         C: ToString,
     {
@@ -394,7 +400,7 @@ where
         self,
         command: C,
         data: D,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         C: ToString,
         D: ToString,
@@ -410,7 +416,7 @@ where
     pub fn change_flag<F>(
         self,
         flag: F,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
         F: ToString,
     {
@@ -418,8 +424,8 @@ where
     }
 
     pub fn enter_spectate(
-        self
-    )-> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+        self,
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         self.send_command("spectate", "-1")
     }
 
@@ -438,7 +444,7 @@ where
         self,
         keycode: KeyCode,
         state: bool,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         use protocol::client::Key;
 
         let packet = Key {
@@ -448,30 +454,27 @@ where
         };
 
         self.send_packet_with_cb(packet, |p, evt| {
-            let mut key_seq = evt.key_seq.lock().unwrap();
-
-            p.seq = *key_seq;
-            *key_seq += 1;
+            p.seq = evt.key_seq.fetch_add(1, Ordering::Relaxed) as u32;
         })
     }
 
     pub fn press_key(
         self,
         keycode: KeyCode,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         self.set_key(keycode, true)
     }
     pub fn release_key(
         self,
         keycode: KeyCode,
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         self.set_key(keycode, false)
     }
 
     pub fn switch_plane(
         self,
-        plane: PlaneType
-    ) -> Client<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
+        plane: PlaneType,
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
         self.send_command("respawn", (plane as u8).to_string())
     }
 
@@ -479,17 +482,19 @@ where
         self.inner
     }
 
-    pub fn into_boxed(self) -> Client<Box<Stream<Item = ClientEvent<P>, Error = ClientError<P>> + Sync + Send>> 
+    pub fn into_boxed(
+        self,
+    ) -> ClientStream<Box<Stream<Item = ClientEvent<P>, Error = ClientError<P>> + Sync + Send>>
     where
-        S: Sync + Send + 'static
+        S: Sync + Send + 'static,
     {
-        Client {
-            inner: Box::new(self.inner)
+        ClientStream {
+            inner: Box::new(self.inner),
         }
     }
 }
 
-impl<S, P> Stream for Client<S>
+impl<S, P> Stream for ClientStream<S>
 where
     P: Protocol + 'static,
     S: Stream<Item = ClientEvent<P>, Error = ClientError<P>>,

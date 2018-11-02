@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Error as FmtError, Formatter};
 
-use tokio_timer::Error as TimerError;
+use tokio::timer::Error as TimerError;
 
 #[derive(Derivative)]
 #[derivative(Debug(bound = "P::SerializeError: Debug"))]
@@ -18,6 +18,16 @@ where
     Serialization(PacketSerializeError<P>),
     Timer(TimerError),
     WsError(WsError),
+    Other
+}
+
+impl<P> From<AbortError> for ClientError<P>
+where
+    P: Protocol
+{
+    fn from(_: AbortError) -> Self {
+         ClientError::Other
+    }
 }
 
 impl<P> From<TimerError> for ClientError<P>

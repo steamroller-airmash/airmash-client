@@ -20,9 +20,12 @@ impl Handler for MessageHandler {
             data: Open(self.sender.clone()),
         });
 
-        result.map_err(|e| WsError {
-            details: e.to_string().into(),
-            kind: ErrorKind::Custom(e.into()),
+        result.map_err(|e| {
+            error!("unbounded_send failed {}: {}", line!(), e);
+            WsError {
+                details: e.to_string().into(),
+                kind: ErrorKind::Custom(e.into()),
+            }
         })
     }
 
@@ -43,9 +46,12 @@ impl Handler for MessageHandler {
             }
         };
 
-        result.map_err(|e| WsError {
-            details: e.to_string().into(),
-            kind: ErrorKind::Custom(e.into()),
+        result.map_err(|e| {
+            error!("unbounded_send failed: {}", e);
+            WsError {
+                details: e.to_string().into(),
+                kind: ErrorKind::Custom(e.into()),
+            }
         })
     }
 
@@ -58,14 +64,21 @@ impl Handler for MessageHandler {
             })
             .unwrap();
     }
+
+    fn on_error(&mut self, err: WsError) {
+        error!("{:#?}", err);
+    }
 }
 
 pub(crate) fn websocket_runner(addr: String, channel: Sender<ReceivedMessage>) {
     info!("Starting websocket connection to {}", addr);
 
-    let result = ws::connect(addr, move |out| MessageHandler {
-        channel: channel.clone(),
-        sender: out,
+    let result = ws::connect(addr, move |out| {
+        info!("Started new connection!");
+        MessageHandler {
+            channel: channel.clone(),
+            sender: out,
+        }
     });
 
     if let Err(e) = result {
