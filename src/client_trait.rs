@@ -9,14 +9,15 @@ use protocol::{KeyCode, PlaneType, Protocol};
 use std::borrow::Borrow;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
-type ClientResult<P> = Result<(), ClientError<P>>;
+pub type ClientResult<P> = Result<(), ClientError<P>>;
 
 pub struct ClientState<'a, P: Protocol> {
-    state: &'a GameState,
-    key_seq: Arc<AtomicUsize>,
-    sender: Sender,
-    protocol: P,
+    pub(crate) state: &'a GameState,
+    pub(crate) key_seq: Arc<AtomicUsize>,
+    pub(crate) sender: Sender,
+    pub(crate) protocol: P,
 }
 
 pub fn default_on_packet<'a, P, C>(
@@ -37,6 +38,7 @@ where
         PlayerLeave(x) => client.on_player_leave(state, x),
         PlayerUpdate(x) => client.on_player_update(state, x),
         PlayerKill(x) => client.on_player_killed(state, x),
+        PlayerRespawn(x) => client.on_player_respawn(state, x),
 
         EventStealth(x) => client.on_player_stealth(state, x),
         EventBoost(x) => client.on_player_boost(state, x),
@@ -64,11 +66,14 @@ pub trait Client<P: Protocol> {
     ) -> ClientResult<P> {
         default_on_packet(self, state, packet)
     }
-    fn on_gameloop<'a>(&mut self, _state: &ClientState<'a, P>) -> ClientResult<P> {
+    fn on_gameloop<'a>(&mut self, _state: &ClientState<'a, P>, _now: Instant) -> ClientResult<P> {
         Ok(())
     }
 
     fn on_open<'a>(&mut self, _state: &ClientState<'a, P>) -> ClientResult<P> {
+        Ok(())
+    }
+    fn on_close<'a>(&mut self, _state: &ClientState<'a, P>) -> ClientResult<P> {
         Ok(())
     }
 
@@ -142,6 +147,13 @@ pub trait Client<P: Protocol> {
         &mut self,
         _state: &ClientState<'a, P>,
         _info: &PlayerHit,
+    ) -> ClientResult<P> {
+        Ok(())
+    }
+    fn on_player_respawn<'a>(
+        &mut self,
+        _state: &ClientState<'a, P>,
+        _info: &PlayerRespawn
     ) -> ClientResult<P> {
         Ok(())
     }

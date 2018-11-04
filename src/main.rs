@@ -4,105 +4,64 @@ extern crate log;
 extern crate simple_logger;
 extern crate tokio;
 
-use airmash_client::protocol::{KeyCode, PlaneType};
-use airmash_client::ClientStream;
+use airmash_client::protocol::{KeyCode, PlaneType, Protocol};
+use airmash_client::protocol::server::{PlayerRespawn};
+use airmash_client::{ClientStream, Client, ClientState, ClientResult, ClientEventData};
 use futures::Future;
 
 use std::env;
 use std::error::Error;
 use std::time::Duration;
 use tokio::prelude::future as futures;
+use tokio::prelude::Stream;
+
+struct MoveForwardAndShoot;
+
+impl<P: Protocol> Client<P> for MoveForwardAndShoot {
+    fn on_player_respawn<'a>(&mut self, state: &ClientState<'a, P>, packet: &PlayerRespawn) -> ClientResult<P> {
+        let me = state.state().me.id;
+
+        if packet.id == me {
+            state.press_key(KeyCode::Up)?;
+            state.press_key(KeyCode::Fire)?;
+        }
+
+        Ok(())
+    }
+
+    fn on_close<'a>(&mut self, _: &ClientState<'a, P>) -> ClientResult<P> {
+        println!("Closing!");
+        Ok(())
+    }
+}
 
 fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     env::set_var("RUST_BACKTRACE", "1");
 
     let mut vals = vec![];
 
-    for i in 0..1 {
+    for i in 0..80 {
+        let wait = i % 100;
         let client = ClientStream::new(server)?
             .login(&format!("{} {}", name, i), "CA")
-            .wait(Duration::from_secs(1))
-            .switch_plane(PlaneType::Goliath)
+            .wait(Duration::from_secs(2))
+            .wait(Duration::from_millis(wait * 20))
             .wait(Duration::from_secs(5))
+            .switch_plane(PlaneType::Goliath)
+            .press_key(KeyCode::Fire)
+            .press_key(KeyCode::Up)
+            .into_boxed()
             //.enter_spectate()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .into_boxed()
-            .wait(Duration::from_secs(15))
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .press_key(KeyCode::Up)
-            .press_key(KeyCode::Fire)
-            .wait(Duration::from_secs(15))
-            .into_boxed()
-            .disconnect()
-            .map(|_| ())
-            .map_err(|e| { error!("An error occurred: {}", e); });
+            .with_client(MoveForwardAndShoot)
+            .map_err(|e| { error!("An error occurred: {}", e); })
+            .take_while(|x| {
+                match x.data {
+                    ClientEventData::Close => Ok(false),
+                    _ => Ok(true)
+                }
+            })
+            .for_each(|_| Ok(()))
+            .map(|_| ());
         vals.push(client);
     }
 
@@ -111,8 +70,8 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
-//const SERVER: &'static str = "wss://game-eu-s1.airma.sh/ctf1";//"ws://localhost:3501";
+//const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
+const SERVER: &'static str = /*"wss://game-eu-s1.airma.sh/ctf1";// */"ws://localhost:3501";
 
 fn main() {
     simple_logger::init_with_level(log::Level::Info).unwrap();

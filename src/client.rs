@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use error::{ClientError, PacketSerializeError, AbortError};
 use gamestate::GameState;
+use client_trait::{Client, ClientState};
 use message_handler::websocket_runner;
 use received_message::{ReceivedMessage, ReceivedMessageData};
 
@@ -150,7 +151,7 @@ impl<P: Protocol + 'static> ClientBase<P> {
         let mut wait = channel.wait();
         let msg = match wait.next() {
             Some(Ok(x)) => x,
-            _ => panic!("Unexpected message!"),
+            _ => Err(AbortError)?,
         };
 
         let sender = match msg.data {
@@ -231,11 +232,41 @@ impl ClientStream<()> {
 
 impl<S, P> ClientStream<S>
 where
-    P: Protocol + 'static,
+    P: Protocol + Clone + 'static,
     S: Stream<Item = ClientEvent<P>, Error = ClientError<P>>,
 {
     pub fn from_stream(stream: S) -> Self {
         Self { inner: stream }
+    }
+
+    pub fn with_client<C>(self, mut client: C) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> 
+    where
+        C: Client<P>
+    {
+        use self::ClientEventData::*;
+
+        ClientStream {
+            inner: self.inner
+                .and_then(move |x| {
+                    {
+                        let guard = x.state.lock().unwrap();
+                        let state = ClientState {
+                            key_seq: x.key_seq.clone(),
+                            protocol: x.base.protocol.clone(),
+                            sender: x.base.sender.clone(),
+                            state: &*guard,
+                        };
+
+                        match &x.data {
+                            Frame => client.on_gameloop(&state, Instant::now()),
+                            Packet(x) => client.on_packet(&state, x),
+                            Close => client.on_close(&state),
+                        }?;
+                    }
+
+                    Ok(x)
+                })
+        }
     }
 
     pub fn login_with_session_and_horizon(
