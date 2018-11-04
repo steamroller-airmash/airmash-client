@@ -20,6 +20,7 @@ mod message_handler;
 mod public_message;
 mod received_message;
 
+pub use gamestate::{GameState, MyPlayerData, PlayerData, MobData};
 pub use client::{ClientStream, ClientBase, ClientEvent, ClientEventData};
-pub use client_trait::{Client, ClientState, default_on_packet};
+pub use client_trait::{Client, ClientState, default_on_packet, ClientResult};
 pub use error::ClientError;
