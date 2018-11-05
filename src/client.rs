@@ -513,6 +513,16 @@ where
         self.inner
     }
 
+    pub fn until_close(self) -> impl Future<Item = (), Error = ClientError<P>> {
+        self.inner.take_while(|x| {
+            match x.data {
+                ClientEventData::Close => Ok(false),
+                _ => Ok(true)
+            }
+        })
+        .for_each(|_| Ok(()))
+    }
+
     pub fn into_boxed(
         self,
     ) -> ClientStream<Box<Stream<Item = ClientEvent<P>, Error = ClientError<P>> + Sync + Send>>

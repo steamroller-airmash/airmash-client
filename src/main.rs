@@ -6,14 +6,13 @@ extern crate tokio;
 
 use airmash_client::protocol::{KeyCode, PlaneType, Protocol};
 use airmash_client::protocol::server::{PlayerRespawn};
-use airmash_client::{ClientStream, Client, ClientState, ClientResult, ClientEventData};
+use airmash_client::{ClientStream, Client, ClientState, ClientResult};
 use futures::Future;
 
 use std::env;
 use std::error::Error;
 use std::time::Duration;
 use tokio::prelude::future as futures;
-use tokio::prelude::Stream;
 
 struct MoveForwardAndShoot;
 
@@ -53,15 +52,9 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
             .into_boxed()
             //.enter_spectate()
             .with_client(MoveForwardAndShoot)
+            .until_close()
             .map_err(|e| { error!("An error occurred: {}", e); })
-            .take_while(|x| {
-                match x.data {
-                    ClientEventData::Close => Ok(false),
-                    _ => Ok(true)
-                }
-            })
-            .for_each(|_| Ok(()))
-            .map(|_| ());
+            .map(move |_| error!("Closed client {}", i));
         vals.push(client);
     }
 
