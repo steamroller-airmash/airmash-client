@@ -39,7 +39,7 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
 
     let mut vals = vec![];
 
-    for i in 0..35 {
+    for i in 0..100 {
         let wait = i % 400;
         let client = ClientStream::new(server)?
             .login(&format!("{} {}", name, i), "CA")
