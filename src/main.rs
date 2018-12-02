@@ -39,14 +39,15 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
 
     let mut vals = vec![];
 
-    for i in 0..100 {
-        let wait = i % 100;
+    for i in 0..35 {
+        let wait = i % 400;
         let client = ClientStream::new(server)?
             .login(&format!("{} {}", name, i), "CA")
-            .wait(Duration::from_secs(2))
-            .wait(Duration::from_millis(wait * 20))
+            .wait(Duration::from_secs(4))
+            .wait(Duration::from_millis(wait * 100))
             .wait(Duration::from_secs(5))
             .switch_plane(PlaneType::Goliath)
+            .wait(Duration::from_secs(1))
             .press_key(KeyCode::Fire)
             .press_key(KeyCode::Up)
             .into_boxed()
@@ -63,8 +64,9 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-//const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
-const SERVER: &'static str = /*"wss://game-eu-s1.airma.sh/ctf1";// */"ws://localhost:3501";
+const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
+//const SERVER: &'static str = "wss://game-us-s1.airma.sh/ctf1";
+//const SERVER: &'static str = "ws://localhost:3501";
 
 fn main() {
     simple_logger::init_with_level(log::Level::Info).unwrap();

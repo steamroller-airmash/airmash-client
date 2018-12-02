@@ -4,3 +4,4 @@ Cargo.lock
 .dockerignore
 Dockerfile
 docker-compose.yml
+.vscode
