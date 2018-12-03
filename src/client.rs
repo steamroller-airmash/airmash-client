@@ -1,4 +1,4 @@
-use protocol::{ClientPacket, ServerPacket, Protocol, Position};
+use protocol::{ClientPacket, Position, Protocol, ServerPacket};
 use protocol_v5::ProtocolV5;
 
 use std::error::Error;
@@ -70,11 +70,9 @@ where
 
         match packet {
             Ping(ping) => {
-                self.send_packet(Pong {
-                    num: ping.num,
-                })?;
-            },
-            _ => ()
+                self.send_packet(Pong { num: ping.num })?;
+            }
+            _ => (),
         };
 
         Ok(())
@@ -82,7 +80,11 @@ where
 
     fn update_state_once(&mut self) -> Result<(), Box<Error>> {
         let frame_end = self.last_update + FRAME_TIME;
-        let iter = self.packets.try_iter().filter(|x| x.time < frame_end).collect::<Vec<_>>();
+        let iter = self
+            .packets
+            .try_iter()
+            .filter(|x| x.time < frame_end)
+            .collect::<Vec<_>>();
 
         for msg in iter {
             if let Ok(packet) = msg.as_packet(&self.protocol) {
@@ -227,7 +229,11 @@ where
         self.update_state()
     }
 
-    pub fn send_command<'a, C, D>(&'a mut self, command: C, data: D) -> Result<&'a mut Self, Box<Error>>
+    pub fn send_command<'a, C, D>(
+        &'a mut self,
+        command: C,
+        data: D,
+    ) -> Result<&'a mut Self, Box<Error>>
     where
         C: ToString,
         D: ToString,
@@ -236,7 +242,7 @@ where
 
         self.send_packet(Command {
             com: command.to_string(),
-            data: data.to_string()
+            data: data.to_string(),
         })?;
 
         self.update_state()
@@ -244,7 +250,7 @@ where
 }
 
 #[cfg(feature = "admin")]
-impl<P: Protocol> Client<P> 
+impl<P: Protocol> Client<P>
 where
     P::SerializeError: 'static,
     P::DeserializeError: 'static,
@@ -253,14 +259,19 @@ where
         self.teleport_other(0, dest)
     }
 
-    pub fn teleport_other<'a>(&'a mut self, other: u16, dest: Position) -> Result<&'a mut Self, Box<Error>> {
+    pub fn teleport_other<'a>(
+        &'a mut self,
+        other: u16,
+        dest: Position,
+    ) -> Result<&'a mut Self, Box<Error>> {
         self.send_command(
             "teleport",
-            format!("{} {} {}", 
-                other, 
-                dest.x.inner() as i32, 
+            format!(
+                "{} {} {}",
+                other,
+                dest.x.inner() as i32,
                 dest.y.inner() as i32
-            )
+            ),
         )
     }
 }

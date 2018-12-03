@@ -2,8 +2,8 @@ extern crate airmash_client;
 extern crate log;
 extern crate simple_logger;
 
-use airmash_client::Client;
 use airmash_client::protocol::Position;
+use airmash_client::Client;
 
 use std::error::Error;
 use std::time::Duration;
