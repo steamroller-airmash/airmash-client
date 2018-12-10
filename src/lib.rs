@@ -17,7 +17,6 @@ mod client_trait;
 mod error;
 mod gamestate;
 mod message_handler;
-mod public_message;
 mod received_message;
 
 pub use gamestate::{GameState, MyPlayerData, PlayerData, MobData};
