@@ -22,7 +22,7 @@ use received_message::{ReceivedMessage, ReceivedMessageData};
 
 const FRAME_TIME: Duration = Duration::from_nanos(16666667);
 
-enum InternalEvent {
+pub(crate) enum InternalEvent {
     Frame(Instant),
     Packet(ReceivedMessage),
 }

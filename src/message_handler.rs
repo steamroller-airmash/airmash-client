@@ -8,7 +8,7 @@ use received_message::*;
 
 use self::ReceivedMessageData::*;
 
-struct MessageHandler {
+pub(crate) struct MessageHandler {
     channel: Sender<ReceivedMessage>,
     sender: ws::Sender,
 }

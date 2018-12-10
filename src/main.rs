@@ -39,7 +39,7 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
 
     let mut vals = vec![];
 
-    for i in 0..100 {
+    for i in 0..1 {
         let wait = i % 400;
         let client = ClientStream::new(server)?
             .login(&format!("{} {}", name, i), "CA")
@@ -64,8 +64,8 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
-//const SERVER: &'static str = "wss://game-us-s1.airma.sh/ctf1";
+const SERVER: &'static str = "wss://game.airmash.steamroller.tk/ffa";
+//const SERVER: &'static str = "wss://game-asia-s1.airma.sh/ctf1";
 //const SERVER: &'static str = "ws://localhost:3501";
 
 fn main() {
