@@ -28,7 +28,7 @@ mod received_message;
 
 mod client2;
 
-pub use client::{ClientBase, ClientEvent, ClientEventData, ClientStream};
-pub use client_trait::{default_on_packet, Client, ClientResult, ClientState};
-pub use error::ClientError;
-pub use gamestate::{GameState, MobData, MyPlayerData, PlayerData};
+pub use crate::client::{ClientBase, ClientEvent, ClientEventData, ClientStream};
+pub use crate::client_trait::{default_on_packet, Client, ClientResult, ClientState};
+pub use crate::error::ClientError;
+pub use crate::gamestate::{GameState, MobData, MyPlayerData, PlayerData};

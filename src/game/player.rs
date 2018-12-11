@@ -1,5 +1,5 @@
-use protocol::server::*;
-use protocol::*;
+use crate::protocol::server::*;
+use crate::protocol::*;
 
 #[derive(Default, Debug, Clone)]
 pub struct Player {

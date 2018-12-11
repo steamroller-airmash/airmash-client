@@ -1,7 +1,7 @@
 use ws::Sender;
 
-use error::PacketDeserializeError;
-use protocol::{Protocol, ServerPacket};
+use crate::error::PacketDeserializeError;
+use crate::protocol::{Protocol, ServerPacket};
 
 use std::time::Instant;
 

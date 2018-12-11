@@ -1,7 +1,7 @@
 use super::*;
 use super::{Mob, Player};
-use protocol::server::*;
-use protocol::*;
+use crate::protocol::server::*;
+use crate::protocol::*;
 
 use std::time::{Duration, Instant};
 

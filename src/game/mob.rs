@@ -1,4 +1,4 @@
-use protocol::*;
+use crate::protocol::*;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Mob {

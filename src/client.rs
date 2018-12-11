@@ -2,8 +2,8 @@ use futures::sync::mpsc::{unbounded, UnboundedReceiver as Receiver};
 use futures::{Future, Stream};
 use tokio::timer::Interval;
 
-use protocol::{ClientPacket, KeyCode, PlaneType, Protocol, ServerPacket};
-use protocol_v5::ProtocolV5;
+use crate::protocol::{ClientPacket, KeyCode, PlaneType, Protocol, ServerPacket};
+use crate::protocol_v5::ProtocolV5;
 
 use ws::Sender;
 
@@ -14,11 +14,11 @@ use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
-use client_trait::{Client, ClientState};
-use error::{AbortError, ClientError, PacketSerializeError};
-use gamestate::GameState;
-use message_handler::websocket_runner;
-use received_message::{ReceivedMessage, ReceivedMessageData};
+use crate::client_trait::{Client, ClientState};
+use crate::error::{AbortError, ClientError, PacketSerializeError};
+use crate::gamestate::GameState;
+use crate::message_handler::websocket_runner;
+use crate::received_message::{ReceivedMessage, ReceivedMessageData};
 
 const FRAME_TIME: Duration = Duration::from_nanos(16666667);
 
@@ -121,8 +121,8 @@ fn build_client_stream(
         })
         .and_then(|evt| {
             use self::ClientEventData::*;
-            use protocol::client::Pong;
-            use protocol::ServerPacket::Ping;
+            use crate::protocol::client::Pong;
+            use crate::protocol::ServerPacket::Ping;
 
             if let Packet(ref packet) = evt.data {
                 if let Ping(p) = packet {
@@ -281,7 +281,7 @@ where
     where
         Self: Sized,
     {
-        use protocol::client::Login;
+        use crate::protocol::client::Login;
 
         let packet = Login {
             name: name,
@@ -407,7 +407,7 @@ where
     where
         C: ToString,
     {
-        use protocol::client::Chat;
+        use crate::protocol::client::Chat;
 
         self.send_packet(Chat {
             text: message.to_string(),
@@ -421,7 +421,7 @@ where
     where
         C: ToString,
     {
-        use protocol::client::Say;
+        use crate::protocol::client::Say;
 
         self.send_packet(Say {
             text: message.to_string(),
@@ -437,7 +437,7 @@ where
         C: ToString,
         D: ToString,
     {
-        use protocol::client::Command;
+        use crate::protocol::client::Command;
 
         self.send_packet(Command {
             com: command.to_string(),
@@ -477,7 +477,7 @@ where
         keycode: KeyCode,
         state: bool,
     ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> {
-        use protocol::client::Key;
+        use crate::protocol::client::Key;
 
         let packet = Key {
             key: keycode,

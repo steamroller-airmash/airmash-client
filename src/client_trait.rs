@@ -1,10 +1,10 @@
 use ws::Sender;
 
-use error::*;
-use gamestate::GameState;
-use protocol::server::*;
-use protocol::{ClientPacket, ServerPacket};
-use protocol::{KeyCode, PlaneType, Protocol};
+use crate::error::*;
+use crate::gamestate::GameState;
+use crate::protocol::server::*;
+use crate::protocol::{ClientPacket, ServerPacket};
+use crate::protocol::{KeyCode, PlaneType, Protocol};
 
 use std::borrow::Borrow;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -243,14 +243,14 @@ impl<'a, P: Protocol> ClientState<'a, P> {
 
 impl<'a, P: Protocol> ClientState<'a, P> {
     pub fn chat<C: ToString>(&self, message: C) -> ClientResult<P> {
-        use protocol::client::Chat;
+        use crate::protocol::client::Chat;
 
         self.send_packet(Chat {
             text: message.to_string(),
         })
     }
     pub fn say<C: ToString>(&self, message: C) -> ClientResult<P> {
-        use protocol::client::Say;
+        use crate::protocol::client::Say;
 
         self.send_packet(Say {
             text: message.to_string(),
@@ -262,7 +262,7 @@ impl<'a, P: Protocol> ClientState<'a, P> {
         C: ToString,
         D: ToString,
     {
-        use protocol::client::Command;
+        use crate::protocol::client::Command;
 
         self.send_packet(Command {
             com: command.to_string(),
@@ -293,7 +293,7 @@ impl<'a, P: Protocol> ClientState<'a, P> {
     }
 
     pub fn set_key(&self, keycode: KeyCode, state: bool) -> ClientResult<P> {
-        use protocol::client::Key;
+        use crate::protocol::client::Key;
 
         self.send_packet(Key {
             key: keycode,
@@ -322,7 +322,7 @@ impl<'a, P: Protocol> ClientState<'a, P> {
     where
         Self: Sized,
     {
-        use protocol::client::Login;
+        use crate::protocol::client::Login;
 
         let packet = Login {
             name: name,

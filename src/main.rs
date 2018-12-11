@@ -7,7 +7,7 @@ extern crate tokio;
 use airmash_client::protocol::server::PlayerRespawn;
 use airmash_client::protocol::{KeyCode, PlaneType, Protocol};
 use airmash_client::{Client, ClientResult, ClientState, ClientStream};
-use futures::Future;
+use crate::futures::Future;
 
 use std::env;
 use std::error::Error;
