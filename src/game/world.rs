@@ -260,7 +260,6 @@ impl World {
         for (i, data) in packet.rankings.iter().enumerate() {
             if let Some(player) = self.players.get_mut(&data.id.into()) {
                 player.rank = i as u16;
-
                 if let Some(x) = data.pos {
                     if !player.visible {
                         player.pos = x;
