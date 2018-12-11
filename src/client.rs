@@ -14,9 +14,9 @@ use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
-use error::{ClientError, PacketSerializeError, AbortError};
-use gamestate::GameState;
 use client_trait::{Client, ClientState};
+use error::{AbortError, ClientError, PacketSerializeError};
+use gamestate::GameState;
 use message_handler::websocket_runner;
 use received_message::{ReceivedMessage, ReceivedMessageData};
 
@@ -198,7 +198,6 @@ impl<P: Protocol + 'static> ClientBase<P> {
     {
         self.send_packet_ref(&packet.into())
     }
-
 }
 
 impl ClientBase<ProtocolV5> {
@@ -239,33 +238,35 @@ where
         Self { inner: stream }
     }
 
-    pub fn with_client<C>(self, mut client: C) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>> 
+    pub fn with_client<C>(
+        self,
+        mut client: C,
+    ) -> ClientStream<impl Stream<Item = ClientEvent<P>, Error = ClientError<P>>>
     where
-        C: Client<P>
+        C: Client<P>,
     {
         use self::ClientEventData::*;
 
         ClientStream {
-            inner: self.inner
-                .and_then(move |x| {
-                    {
-                        let guard = x.state.lock().unwrap();
-                        let state = ClientState {
-                            key_seq: x.key_seq.clone(),
-                            protocol: x.base.protocol.clone(),
-                            sender: x.base.sender.clone(),
-                            state: &*guard,
-                        };
+            inner: self.inner.and_then(move |x| {
+                {
+                    let guard = x.state.lock().unwrap();
+                    let state = ClientState {
+                        key_seq: x.key_seq.clone(),
+                        protocol: x.base.protocol.clone(),
+                        sender: x.base.sender.clone(),
+                        state: &*guard,
+                    };
 
-                        match &x.data {
-                            Frame => client.on_gameloop(&state, Instant::now()),
-                            Packet(x) => client.on_packet(&state, x),
-                            Close => client.on_close(&state),
-                        }?;
-                    }
+                    match &x.data {
+                        Frame => client.on_gameloop(&state, Instant::now()),
+                        Packet(x) => client.on_packet(&state, x),
+                        Close => client.on_close(&state),
+                    }?;
+                }
 
-                    Ok(x)
-                })
+                Ok(x)
+            }),
         }
     }
 
@@ -514,13 +515,12 @@ where
     }
 
     pub fn until_close(self) -> impl Future<Item = (), Error = ClientError<P>> {
-        self.inner.take_while(|x| {
-            match x.data {
+        self.inner
+            .take_while(|x| match x.data {
                 ClientEventData::Close => Ok(false),
-                _ => Ok(true)
-            }
-        })
-        .for_each(|_| Ok(()))
+                _ => Ok(true),
+            })
+            .for_each(|_| Ok(()))
     }
 
     pub fn into_boxed(

@@ -18,15 +18,15 @@ where
     Serialization(PacketSerializeError<P>),
     Timer(TimerError),
     WsError(WsError),
-    Other
+    Other,
 }
 
 impl<P> From<AbortError> for ClientError<P>
 where
-    P: Protocol
+    P: Protocol,
 {
     fn from(_: AbortError) -> Self {
-         ClientError::Other
+        ClientError::Other
     }
 }
 
