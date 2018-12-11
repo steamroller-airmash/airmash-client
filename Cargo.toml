@@ -9,6 +9,10 @@ license = "Apache-2.0 OR MIT"
 admin = []
 default = ["admin"]
 
+[patch.crates-io]
+airmash-protocol = { git = "https://github.com/steamroller-airmash/airmash-protocol-rs" }
+airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-protocol-v5" }
+
 [dependencies]
 fnv = "*"
 ws = { version = "*", features=["ssl"] }
@@ -19,3 +23,4 @@ airmash-protocol-v5 = "0.0"
 log = "*"
 simple_logger = "*"
 derivative = "*"
+hashbrown = "*"
