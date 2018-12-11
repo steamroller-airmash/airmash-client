@@ -4,7 +4,7 @@ use futures::sync::mpsc::UnboundedSender as Sender;
 
 use std::time::Instant;
 
-use received_message::*;
+use crate::received_message::*;
 
 use self::ReceivedMessageData::*;
 

@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use protocol::ClientPacket;
+use crate::protocol::ClientPacket;
 
 pub enum ChannelEvent {
     Frame { time: Instant },

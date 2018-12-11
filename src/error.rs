@@ -1,4 +1,4 @@
-use protocol::Protocol;
+use crate::protocol::Protocol;
 
 use ws::{Error as WsError, ErrorKind};
 

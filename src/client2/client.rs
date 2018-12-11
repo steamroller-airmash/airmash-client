@@ -1,5 +1,5 @@
 use super::*;
-use protocol::{ClientPacket, ServerPacket};
+use crate::protocol::{ClientPacket, ServerPacket};
 
 pub struct Client {}
 

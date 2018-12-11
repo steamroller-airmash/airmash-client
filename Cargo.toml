@@ -4,7 +4,7 @@ version = "0.0.0"
 authors = ["STEAMROLLER"]
 publish = false
 license = "Apache-2.0 OR MIT"
-#edition = "2018"
+edition = "2018"
 
 [features]
 admin = []
