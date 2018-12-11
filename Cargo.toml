@@ -4,6 +4,7 @@ version = "0.0.0"
 authors = ["STEAMROLLER"]
 publish = false
 license = "Apache-2.0 OR MIT"
+#edition = "2018"
 
 [features]
 admin = []
@@ -18,9 +19,11 @@ fnv = "*"
 ws = { version = "*", features=["ssl"] }
 tokio = "*"
 futures = "*"
+tokio-tungstenite = "*"
 airmash-protocol = "0.2"
 airmash-protocol-v5 = "0.0"
 log = "*"
 simple_logger = "*"
 derivative = "*"
 hashbrown = "*"
+url = "*"

@@ -1,5 +1,6 @@
 //!
-//!
+
+#![feature(futures_api)]
 
 extern crate ws;
 #[macro_use]
@@ -10,8 +11,12 @@ pub extern crate airmash_protocol as protocol;
 extern crate airmash_protocol_v5 as protocol_v5;
 extern crate fnv;
 extern crate futures;
-extern crate tokio;
 extern crate hashbrown;
+extern crate tokio;
+extern crate tokio_tungstenite;
+extern crate url;
+
+use tokio_tungstenite::tungstenite;
 
 mod client;
 mod client_trait;
@@ -20,6 +25,8 @@ mod game;
 mod gamestate;
 mod message_handler;
 mod received_message;
+
+mod client2;
 
 pub use client::{ClientBase, ClientEvent, ClientEventData, ClientStream};
 pub use client_trait::{default_on_packet, Client, ClientResult, ClientState};

@@ -1,10 +1,9 @@
-
 use super::*;
-use super::{Player, Mob};
-use protocol::*;
+use super::{Mob, Player};
 use protocol::server::*;
+use protocol::*;
 
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use hashbrown::HashMap;
 
@@ -26,19 +25,19 @@ macro_rules! warn_unknown {
             $class,
             $id.0
         );
-    }
+    };
 }
 
 macro_rules! warn_unknown_player {
     ($ty:ident, $id:expr) => {
         warn_unknown!("player", $ty, $id);
-    }
+    };
 }
 
 macro_rules! warn_unknown_mob {
     ($ty:ident, $id:expr) => {
         warn_unknown!("mob", $ty, $id);
-    }
+    };
 }
 
 impl World {
@@ -69,13 +68,11 @@ impl World {
             EventLeaveHorizon(p) => self.handle_event_leave_horizon(p),
             EventRepel(p) => self.handle_event_repel(p),
             EventStealth(p) => self.handle_event_stealth(p),
-            _ => ()
+            _ => (),
         }
     }
 
-    pub fn update(&mut self, _now: Instant) {
-        
-    }
+    pub fn update(&mut self, _now: Instant) {}
 }
 
 // Packet handling details
@@ -83,8 +80,7 @@ impl World {
     fn handle_player_update(&mut self, update: &PlayerUpdate) {
         if let Some(player) = self.players.get_mut(&update.id.into()) {
             player.update(update);
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerUpdate, update.id);
         }
     }
@@ -123,8 +119,7 @@ impl World {
             if let Some(player) = self.players.get_mut(&data.id.into()) {
                 player.health = data.health;
                 player.health_regen = data.health_regen;
-            }
-            else {
+            } else {
                 warn_unknown_mob!(PlayerHit, data.id);
             }
         }
@@ -133,30 +128,24 @@ impl World {
         if let Some(player) = self.players.get_mut(&packet.id.into()) {
             player.status = PlayerStatus::Dead;
             player.pos = packet.pos;
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerKill, packet.id);
         }
     }
     fn handle_player_level(&mut self, packet: &PlayerLevel) {
         if let Some(player) = self.players.get_mut(&packet.id.into()) {
             player.level = Some(packet.level.into());
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerLevel, packet.id);
         }
     }
     fn handle_player_powerup(&mut self, packet: &PlayerPowerup) {
-        use self::PowerupType::*;
-
-        self.me.powerup_expiry = Some(
-            Instant::now() + Duration::from_millis(packet.duration.into())
-        );
+        self.me.powerup_expiry =
+            Some(Instant::now() + Duration::from_millis(packet.duration.into()));
 
         if let Some(_player) = self.players.get_mut(&self.me.id) {
             // FIXME: This should probably set some state
-        }
-        else {
+        } else {
             error!("The current player doesn't exist (id: {})", self.me.id);
         }
     }
@@ -165,8 +154,7 @@ impl World {
             player.pos = packet.pos;
             player.rot = packet.rot;
             player.upgrades = packet.upgrades;
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerRespawn, packet.id);
         }
     }
@@ -174,8 +162,7 @@ impl World {
         for data in packet.players.iter() {
             if let Some(player) = self.players.get_mut(&data.id.into()) {
                 player.team = data.team;
-            }
-            else {
+            } else {
                 warn_unknown_player!(PlayerReteam, data.id);
             }
         }
@@ -183,8 +170,7 @@ impl World {
     fn handle_player_type(&mut self, packet: &PlayerType) {
         if let Some(player) = self.players.get_mut(&packet.id.into()) {
             player.plane = packet.ty;
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerType, packet.id);
         }
     }
@@ -194,7 +180,7 @@ impl World {
             speed: packet.speed,
             defense: packet.defense,
             energy: packet.energy,
-            missile: packet.missile
+            missile: packet.missile,
         };
     }
     fn handle_player_fire(&mut self, packet: &PlayerFire) {
@@ -203,8 +189,7 @@ impl World {
         if let Some(player) = self.players.get_mut(&packet.id.into()) {
             player.energy = packet.energy;
             player.energy_regen = packet.energy_regen;
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerFire, packet.id);
         }
 
@@ -230,8 +215,7 @@ impl World {
     fn handle_player_flag(&mut self, packet: &PlayerFlag) {
         if let Some(player) = self.players.get_mut(&packet.id.into()) {
             player.flag = packet.flag;
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerFlag, packet.id);
         }
     }
@@ -244,14 +228,16 @@ impl World {
         };
         self.game_ty = packet.ty;
         self.room = packet.room.clone();
-        
-        self.players = packet.players.iter()
+
+        self.players = packet
+            .players
+            .iter()
             .map(|player| {
                 let level = match player.level.into() {
                     0 => None,
-                    x => Some(x)
+                    x => Some(x),
                 };
-                
+
                 let details = Player {
                     level,
                     id: player.id.into(),
@@ -274,7 +260,7 @@ impl World {
         for (i, data) in packet.rankings.iter().enumerate() {
             if let Some(player) = self.players.get_mut(&data.id.into()) {
                 player.rank = i as u16;
-                
+
                 if let Some(x) = data.pos {
                     if !player.visible {
                         player.pos = x;
@@ -282,8 +268,7 @@ impl World {
                 }
 
                 player.is_spec = data.pos.is_none();
-            }
-            else {
+            } else {
                 warn_unknown_player!(ScoreBoard, data.id);
             }
         }
@@ -295,8 +280,7 @@ impl World {
             player.unused_upgrades = packet.upgrades;
             player.kills = packet.total_kills;
             player.deaths = packet.total_deaths;
-        }
-        else {
+        } else {
             warn_unknown_player!(ScoreUpdate, packet.id);
         }
     }
@@ -311,8 +295,7 @@ impl World {
             player.vel = evt.speed;
             player.energy = evt.energy;
             player.energy_regen = evt.energy_regen;
-        }
-        else {
+        } else {
             warn_unknown_player!(EventBounce, evt.id);
         }
     }
@@ -324,8 +307,7 @@ impl World {
             player.pos = evt.pos;
             player.rot = evt.rot;
             player.vel = evt.speed;
-        }
-        else {
+        } else {
             warn_unknown_player!(EventBounce, evt.id);
         }
     }
@@ -339,11 +321,10 @@ impl World {
             Player => {
                 if let Some(player) = self.players.get_mut(&evt.id) {
                     player.visible = false;
-                }
-                else {
+                } else {
                     warn_unknown_player!(EventLeaveHorizon, (evt.id, ()));
                 }
-            },
+            }
             Mob => {
                 if let None = self.mobs.remove(&evt.id) {
                     warn_unknown_mob!(EventLeaveHorizon, (evt.id, ()));
@@ -360,8 +341,7 @@ impl World {
             player.vel = evt.speed;
             player.energy = evt.energy;
             player.energy_regen = evt.energy_regen;
-        }
-        else {
+        } else {
             warn_unknown_player!(EventRepel, evt.id);
         }
 
@@ -374,8 +354,7 @@ impl World {
                 player.energy_regen = data.energy_regen;
                 player.health = data.health;
                 player.health_regen = data.health_regen;
-            }
-            else {
+            } else {
                 warn_unknown_player!(EventRepel, data.id);
             }
         }
@@ -395,8 +374,7 @@ impl World {
                         mob.ty
                     );
                 }
-            }
-            else {
+            } else {
                 warn_unknown_mob!(EventRepel, data.id);
             }
         }
@@ -406,8 +384,7 @@ impl World {
             player.energy = evt.energy;
             player.energy_regen = evt.energy_regen;
             player.keystate.stealth = evt.state;
-        }
-        else {
+        } else {
             warn_unknown_player!(EventStealth, evt.id);
         }
     }

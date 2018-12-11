@@ -1,4 +1,3 @@
-
 use std::time::Instant;
 
 #[derive(Debug, Default, Copy, Clone)]
