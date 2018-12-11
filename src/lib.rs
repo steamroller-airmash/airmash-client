@@ -11,15 +11,17 @@ extern crate airmash_protocol_v5 as protocol_v5;
 extern crate fnv;
 extern crate futures;
 extern crate tokio;
+extern crate hashbrown;
 
 mod client;
 mod client_trait;
 mod error;
+mod game;
 mod gamestate;
 mod message_handler;
 mod received_message;
 
-pub use gamestate::{GameState, MyPlayerData, PlayerData, MobData};
-pub use client::{ClientStream, ClientBase, ClientEvent, ClientEventData};
-pub use client_trait::{Client, ClientState, default_on_packet, ClientResult};
+pub use client::{ClientBase, ClientEvent, ClientEventData, ClientStream};
+pub use client_trait::{default_on_packet, Client, ClientResult, ClientState};
 pub use error::ClientError;
+pub use gamestate::{GameState, MobData, MyPlayerData, PlayerData};
