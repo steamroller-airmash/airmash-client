@@ -4,10 +4,10 @@ extern crate log;
 extern crate simple_logger;
 extern crate tokio;
 
+use crate::futures::Future;
 use airmash_client::protocol::server::PlayerRespawn;
 use airmash_client::protocol::{KeyCode, PlaneType, Protocol};
 use airmash_client::{Client, ClientResult, ClientState, ClientStream};
-use crate::futures::Future;
 
 use std::env;
 use std::error::Error;
