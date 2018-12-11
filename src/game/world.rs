@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use hashbrown::HashMap;
 
+#[derive(Default, Debug, Clone)]
 pub struct World {
     pub me: CurrentPlayer,
     pub mobs: HashMap<u16, Mob>,
