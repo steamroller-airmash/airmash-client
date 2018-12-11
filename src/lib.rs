@@ -1,6 +1,6 @@
 //!
 
-#![feature(futures_api)]
+#![feature(futures_api, await_macro)]
 
 extern crate ws;
 #[macro_use]
@@ -13,10 +13,10 @@ extern crate fnv;
 extern crate futures;
 extern crate hashbrown;
 extern crate tokio;
+extern crate tokio_tls;
 extern crate tokio_tungstenite;
+extern crate tungstenite;
 extern crate url;
-
-use tokio_tungstenite::tungstenite;
 
 mod client;
 mod client_trait;
