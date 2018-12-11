@@ -4,9 +4,9 @@ extern crate log;
 extern crate simple_logger;
 extern crate tokio;
 
+use airmash_client::protocol::server::PlayerRespawn;
 use airmash_client::protocol::{KeyCode, PlaneType, Protocol};
-use airmash_client::protocol::server::{PlayerRespawn};
-use airmash_client::{ClientStream, Client, ClientState, ClientResult};
+use airmash_client::{Client, ClientResult, ClientState, ClientStream};
 use futures::Future;
 
 use std::env;
@@ -17,7 +17,11 @@ use tokio::prelude::future as futures;
 struct MoveForwardAndShoot;
 
 impl<P: Protocol> Client<P> for MoveForwardAndShoot {
-    fn on_player_respawn<'a>(&mut self, state: &ClientState<'a, P>, packet: &PlayerRespawn) -> ClientResult<P> {
+    fn on_player_respawn<'a>(
+        &mut self,
+        state: &ClientState<'a, P>,
+        packet: &PlayerRespawn,
+    ) -> ClientResult<P> {
         let me = state.state().me.id;
 
         if packet.id == me {
@@ -54,7 +58,9 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
             //.enter_spectate()
             .with_client(MoveForwardAndShoot)
             .until_close()
-            .map_err(|e| { error!("An error occurred: {}", e); })
+            .map_err(|e| {
+                error!("An error occurred: {}", e);
+            })
             .map(move |_| error!("Closed client {}", i));
         vals.push(client);
     }

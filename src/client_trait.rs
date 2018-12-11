@@ -49,10 +49,10 @@ where
 
         EventLeaveHorizon(x) => client.on_entity_leavehorizon(state, x),
 
-        ChatPublic(x) =>  client.on_player_chat(state, x),
-        ChatTeam(x) =>    client.on_player_team_chat(state, x),
+        ChatPublic(x) => client.on_player_chat(state, x),
+        ChatTeam(x) => client.on_player_team_chat(state, x),
         ChatWhisper(x) => client.on_player_whisper(state, x),
-        ChatSay(x) =>     client.on_player_say(state, x),
+        ChatSay(x) => client.on_player_say(state, x),
 
         _ => Ok(()),
     }
@@ -153,7 +153,7 @@ pub trait Client<P: Protocol> {
     fn on_player_respawn<'a>(
         &mut self,
         _state: &ClientState<'a, P>,
-        _info: &PlayerRespawn
+        _info: &PlayerRespawn,
     ) -> ClientResult<P> {
         Ok(())
     }
@@ -168,7 +168,7 @@ pub trait Client<P: Protocol> {
     fn on_mob_despawn_coords<'a>(
         &mut self,
         _state: &ClientState<'a, P>,
-        _info: &MobDespawnCoords
+        _info: &MobDespawnCoords,
     ) -> ClientResult<P> {
         Ok(())
     }
@@ -191,7 +191,7 @@ pub trait Client<P: Protocol> {
     fn on_player_say<'a>(
         &mut self,
         _state: &ClientState<'a, P>,
-        _info: &ChatSay
+        _info: &ChatSay,
     ) -> ClientResult<P> {
         Ok(())
     }
@@ -205,11 +205,10 @@ pub trait Client<P: Protocol> {
     fn on_player_whisper<'a>(
         &mut self,
         _state: &ClientState<'a, P>,
-        _info: &ChatWhisper
+        _info: &ChatWhisper,
     ) -> ClientResult<P> {
         Ok(())
     }
-    
 }
 
 impl<'a, P: Protocol> ClientState<'a, P> {
