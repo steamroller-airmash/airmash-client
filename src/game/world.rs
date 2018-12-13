@@ -16,6 +16,7 @@ pub struct World {
     pub game_ty: GameType,
     pub room: String,
     pub clock: u32,
+    pub key_seq: u32,
 }
 
 macro_rules! warn_unknown {
@@ -42,6 +43,10 @@ macro_rules! warn_unknown_mob {
 }
 
 impl World {
+    pub fn get_me<'a>(&'a self) -> &'a Player {
+        &self.players[&self.me.id]
+    }
+
     pub fn handle_packet(&mut self, packet: &ServerPacket) {
         use self::ServerPacket::*;
 

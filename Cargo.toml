@@ -16,7 +16,6 @@ airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-pr
 
 [dependencies]
 fnv = "*"
-ws = { version = "*", features=["ssl"] }
 tokio = { version="*", features=["async-await-preview"] }
 tokio-tls = "*"
 futures = "*"
@@ -25,7 +24,6 @@ tokio-tungstenite = "*"
 airmash-protocol = "0.2"
 airmash-protocol-v5 = "0.0"
 log = "*"
-simple_logger = "*"
-derivative = "*"
+env_logger = "*"
 hashbrown = "*"
 url = "*"
