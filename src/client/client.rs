@@ -29,6 +29,7 @@ type FromFn<T, U> = fn(T) -> U;
 type ParseTimeFn = fn(std::time::Instant) -> ClientEvent;
 type ParsePacketFn = fn(tungstenite::Message) -> Result<ClientEvent, ClientError>;
 
+// This is ugly, but it means that client doesn't need type parameters
 type ClientStream = futures::stream::Fuse<
     futures::stream::Select<
         futures::stream::AndThen<
@@ -112,6 +113,20 @@ impl Client {
         Ok(())
     }
 
+    async fn packet_update<'a>(&'a mut self, packet: &'a ServerPacket) -> Result<(), ClientError> {
+        use self::ServerPacket::*;
+        use airmash_protocol::client::Pong;
+
+        self.world.handle_packet(packet);
+
+        match packet {
+            Ping(p) => r#await!(self.send(Pong { num: p.num }))?,
+            _ => ()
+        }
+
+        Ok(())
+    }
+
     pub async fn send<P>(&mut self, packet: P) -> Result<(), ClientError>
     where
         P: Into<ClientPacket> + 'static,
@@ -126,10 +141,17 @@ impl Client {
     }
 
     pub async fn next(&mut self) -> Result<Option<ClientEvent>, ClientError> {
+        use self::ClientEvent::*;
+
         let val = match r#await!(self.stream.next()) {
             Some(x) => x?,
             None => return Ok(None),
         };
+
+        match &val {
+            Packet(p) => r#await!(self.packet_update(p))?,
+            Frame(_) => (),
+        }
 
         Ok(Some(val))
     }

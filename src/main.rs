@@ -46,8 +46,6 @@ async fn on_player_respawn<'a>(
 async fn on_packet<'a>(client: &'a mut Client, packet: ServerPacket, len: u64) -> ClientResult<()> {
     use self::ServerPacket::*;
 
-    client.world.handle_packet(&packet);
-
     match packet {
         Login(x) => await!(on_login(client, &x, len))?,
         PlayerRespawn(x) => await!(on_player_respawn(client, &x))?,
@@ -112,9 +110,9 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
+//const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
 //const SERVER: &'static str = "wss://game-asia-s1.airma.sh/ctf1";
-//const SERVER: &'static str = "ws://localhost:3501";
+const SERVER: &'static str = "ws://localhost:3501";
 
 fn main() {
     env_logger::init();
