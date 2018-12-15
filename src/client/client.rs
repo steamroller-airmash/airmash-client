@@ -1,5 +1,6 @@
 use url::Url;
 
+use std::f32::consts::PI;
 use std::time::{Duration, Instant};
 
 use tokio::prelude::*;
@@ -10,11 +11,12 @@ use tungstenite::Message;
 
 use futures::{Sink, Stream};
 
-use airmash_protocol::{ClientPacket, KeyCode, Protocol, ServerPacket};
+use airmash_protocol::*;
 use airmash_protocol_v5::ProtocolV5;
 
 use super::*;
 use crate::game::World;
+use crate::consts;
 
 type ClientSink = futures::stream::SplitSink<
     tokio_tungstenite::WebSocketStream<
@@ -159,6 +161,11 @@ impl Client {
 
 // Helper functions
 impl Client {
+    /// Press or release a key.
+    /// 
+    /// This corresponds to the [`Key`] client packet.
+    /// 
+    /// [`Key`]: protocol::client::Key
     pub async fn send_key(&mut self, key: KeyCode, state: bool) -> ClientResult<()> {
         use airmash_protocol::client::Key;
 
@@ -168,10 +175,21 @@ impl Client {
         r#await!(self.send(Key { key, seq, state }))
     }
 
+    /// Press a key.
+    /// 
+    /// This corresponds to calling [`send_key`] with `true`.
     pub async fn press_key(&mut self, key: KeyCode) -> ClientResult<()> {
         r#await!(self.send_key(key, true))
     }
 
+    /// Release a key.
+    /// 
+    /// This corresponds to calling [`send_key`] with false.
+    pub async fn release_key(&mut self, key: KeyCode) -> ClientResult<()> {
+        r#await!(self.send_key(key, false))
+    }
+
+    /// Process events until the target time passes.
     pub async fn wait_until(&mut self, tgt: Instant) -> ClientResult<()> {
         while let Some(evt) = r#await!(self.next())? {
             if let ClientEvent::Frame(frame) = evt {
@@ -184,7 +202,51 @@ impl Client {
         Ok(())
     }
 
+    /// Process events for the given duration.
     pub async fn wait(&mut self, dur: Duration) -> ClientResult<()> {
         r#await!(self.wait_until(Instant::now() + dur))
+    }
+
+    /// Turn the plane by a given rotation.
+    /// 
+    /// This is a best effort implementation as it is
+    /// impossible to turn exactly any given amount.
+    /// This method may overshoot in cases where network
+    /// ping changes significantly during the execution
+    /// of the turn.
+    pub async fn turn(&mut self, rot: Rotation) -> ClientResult<()> {
+        let rotrate = consts::rotation_rate(self.world.get_me().plane);
+        let time: Duration = (rot.abs() / rotrate).into();
+
+        let key = if rot < 0.0.into() {
+            KeyCode::Left
+        } else {
+            KeyCode::Right
+        };
+
+        r#await!(self.press_key(key))?;
+        r#await!(self.wait(time))?;
+        r#await!(self.release_key(key))?;
+
+        Ok(())
+    }
+
+    /// Turn to a given angle.
+    /// 
+    /// This is a best effort implementation as it is
+    /// impossible to turn exactly any given amount.
+    /// This method may overshoot in cases where network
+    /// ping changes significantly during the execution
+    /// of the turn.
+    pub async fn turn_to(&mut self, tgt: Rotation) -> ClientResult<()> {
+        // Determine the shortest turn angle
+        // The basic idea comes from this SO answer
+        // https://stackoverflow.com/questions/9505862/shortest-distance-between-two-degree-marks-on-a-circle
+        let rot = self.world.get_me().rot;
+        let pi = Rotation::new(PI);
+        let pi2 = 2.0 * pi;
+        let dist = pi - ((tgt - rot).abs() % pi2 - pi).abs();
+
+        r#await!(self.turn(dist))
     }
 }

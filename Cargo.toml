@@ -6,6 +6,9 @@ publish = false
 license = "Apache-2.0 OR MIT"
 edition = "2018"
 
+[profile.release]
+lto = true
+
 [features]
 admin = []
 default = ["admin"]
@@ -26,3 +29,4 @@ log = "*"
 hashbrown = "*"
 url = "*"
 env_logger = "*"
+rand = "*"

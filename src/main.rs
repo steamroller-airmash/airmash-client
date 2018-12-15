@@ -1,4 +1,5 @@
 #![feature(futures_api, await_macro, async_await)]
+#![allow(dead_code)]
 
 extern crate airmash_client;
 #[macro_use]
@@ -6,6 +7,7 @@ extern crate log;
 extern crate env_logger;
 extern crate tokio;
 extern crate url;
+extern crate rand;
 
 use airmash_client::protocol::{client, server};
 use airmash_client::protocol::{KeyCode, ServerPacket};
@@ -13,7 +15,8 @@ use airmash_client::*;
 
 use std::env;
 use std::error::Error;
-use std::time::Duration;
+use std::time::{Instant, Duration};
+use std::f32::consts::PI;
 
 use tokio::r#await;
 use url::Url;
@@ -22,7 +25,7 @@ async fn on_login<'a>(client: &'a mut Client, _: &'a server::Login, _len: u64) -
     await!(client.wait(Duration::from_secs(3)))?;
     await!(client.send(client::Command {
         com: "respawn".to_owned(),
-        data: "3".to_owned()
+        data: "2".to_owned()
     }))?;
 
     Ok(())
@@ -36,7 +39,6 @@ async fn on_player_respawn<'a>(
 
     if packet.id.0 == me {
         await!(client.press_key(KeyCode::Right))?;
-        await!(client.press_key(KeyCode::Up))?;
         await!(client.press_key(KeyCode::Fire))?;
     }
 
@@ -49,7 +51,6 @@ async fn on_packet<'a>(client: &'a mut Client, packet: ServerPacket, len: u64) -
     match packet {
         Login(x) => await!(on_login(client, &x, len))?,
         PlayerRespawn(x) => await!(on_player_respawn(client, &x))?,
-        Ping(x) => await!(client.send(client::Pong { num: x.num }))?,
         _ => (),
     }
 
@@ -72,11 +73,21 @@ async fn single_bot_inner(name: String, server: Url, i: u64) -> Result<(), Box<E
         session: "none".to_owned()
     }))?;
 
+    // Should probably have a wait-for-login command
+    r#await!(client.wait(Duration::from_secs(1)))?;
+
+    //let mut next = Instant::now() + Duration::from_secs(10);
+
     while let Some(evt) = r#await!(client.next())? {
-        match evt {
-            Packet(p) => r#await!(on_packet(&mut client, p, i))?,
-            Frame(_) => (),
-        }
+        r#await!(client.turn_to(0.0.into()))?;
+        r#await!(client.wait(Duration::from_millis(500)))?;
+        println!("0");
+        r#await!(client.turn_to((PI / 3.0).into()))?;
+        r#await!(client.wait(Duration::from_millis(500)))?;
+        println!("PI/3");
+        r#await!(client.turn_to((PI / 2.0).into()))?;
+        r#await!(client.wait(Duration::from_millis(500)))?;
+        println!("PI/2");
     }
 
     info!("Shutting down bot {}", client.world.get_me().name);
@@ -94,8 +105,11 @@ async fn single_bot(name: String, server: Url, i: u64) {
 }
 
 async fn spawn_bots(name: String, url: Url) {
-    for i in 0..30 {
+    for i in 0..1 {
         tokio::spawn_async(single_bot(format!("{}{}", name, i), url.clone(), i));
+        r#await!(tokio::timer::Delay::new(
+            Instant::now() + Duration::from_millis(50)
+        )).unwrap();
     }
 }
 
@@ -110,9 +124,9 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-//const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
+const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
 //const SERVER: &'static str = "wss://game-asia-s1.airma.sh/ctf1";
-const SERVER: &'static str = "ws://localhost:3501";
+//const SERVER: &'static str = "ws://localhost:3501";
 
 fn main() {
     env_logger::init();
