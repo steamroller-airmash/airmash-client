@@ -12,11 +12,15 @@ pub struct World {
     pub me: CurrentPlayer,
     pub mobs: HashMap<u16, Mob>,
     pub players: HashMap<u16, Player>,
+    pub names: HashMap<String, u16>,
 
     pub game_ty: GameType,
     pub room: String,
     pub clock: u32,
     pub key_seq: u32,
+    pub ping: u16,
+    pub players_game: u32,
+    pub players_total: u32,
 }
 
 macro_rules! warn_unknown {
@@ -46,6 +50,10 @@ impl World {
     pub fn get_me<'a>(&'a self) -> &'a Player {
         &self.players[&self.me.id]
     }
+    pub fn get_me_mut<'a>(&'a mut self) -> &'a mut Player {
+        self.players.get_mut(&self.me.id).unwrap()
+    }
+
 
     pub fn handle_packet(&mut self, packet: &ServerPacket) {
         use self::ServerPacket::*;
@@ -54,6 +62,7 @@ impl World {
             Login(p) => self.handle_login(p),
             ScoreBoard(p) => self.handle_score_board(p),
             ScoreUpdate(p) => self.handle_score_update(p),
+            Error(p) => self.handle_error(p),
 
             PlayerNew(p) => self.handle_player_new(p),
             PlayerUpdate(p) => self.handle_player_update(p),
@@ -68,6 +77,7 @@ impl World {
             PlayerUpgrade(p) => self.handle_player_upgrade(p),
             PlayerFire(p) => self.handle_player_fire(p),
             PlayerFlag(p) => self.handle_player_flag(p),
+            PingResult(p) => self.handle_ping_result(p),
 
             EventBoost(p) => self.handle_event_boost(p),
             EventBounce(p) => self.handle_event_bounce(p),
@@ -108,11 +118,15 @@ impl World {
         if let Some(_old) = self.players.insert(packet.id.into(), new) {
             warn_unknown_player!(PlayerNew, packet.id);
         }
+        self.names.insert(packet.name.clone(), packet.id.into());
     }
     fn handle_player_leave(&mut self, packet: &PlayerLeave) {
         let removed = self.players.remove(&packet.id.into());
 
-        if removed.is_none() {
+        if let Some(player) = removed {
+            self.names.remove(&player.name);
+        }
+        else {
             warn_unknown_player!(PlayerLeave, packet.id);
         }
     }
@@ -160,6 +174,10 @@ impl World {
             player.pos = packet.pos;
             player.rot = packet.rot;
             player.upgrades = packet.upgrades;
+
+            if packet.id.0 == self.me.id {
+                self.get_me_mut().keystate = ServerKeyState::default();
+            }
         } else {
             warn_unknown_player!(PlayerRespawn, packet.id);
         }
@@ -261,6 +279,10 @@ impl World {
                 (details.id, details)
             })
             .collect();
+
+        self.names = self.players.values()
+            .map(|p| (p.name.clone(), p.id))
+            .collect();
     }
     fn handle_score_board(&mut self, packet: &ScoreBoard) {
         for (i, data) in packet.rankings.iter().enumerate() {
@@ -288,6 +310,11 @@ impl World {
         } else {
             warn_unknown_player!(ScoreUpdate, packet.id);
         }
+    }
+    fn handle_ping_result(&mut self, packet: &PingResult) {
+        self.ping = packet.ping;
+        self.players_game = packet.players_game;
+        self.players_total = packet.players_total;
     }
 
     fn handle_event_boost(&mut self, evt: &EventBoost) {
@@ -392,5 +419,9 @@ impl World {
         } else {
             warn_unknown_player!(EventStealth, evt.id);
         }
+    }
+
+    fn handle_error(&mut self, evt: &Error) {
+        info!("{:?}", evt.error);
     }
 }

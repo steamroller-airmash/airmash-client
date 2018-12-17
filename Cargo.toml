@@ -7,7 +7,7 @@ license = "Apache-2.0 OR MIT"
 edition = "2018"
 
 [profile.release]
-lto = true
+#lto = true
 
 [features]
 admin = []
@@ -30,3 +30,5 @@ hashbrown = "*"
 url = "*"
 env_logger = "*"
 rand = "*"
+native-tls = "*"
+#pathfinding = "*"

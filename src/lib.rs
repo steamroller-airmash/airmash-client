@@ -1,6 +1,6 @@
 //!
 
-#![feature(futures_api, await_macro, euclidean_division)]
+#![feature(futures_api, await_macro, euclidean_division, core_intrinsics)]
 
 #[macro_use]
 extern crate log;
@@ -16,6 +16,7 @@ extern crate url;
 
 mod client;
 mod game;
+//mod map;
 
 pub mod consts;
 

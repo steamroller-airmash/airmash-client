@@ -13,7 +13,7 @@ pub enum ClientError {
     Serialize(SerializeError),
     Deserialize(DeserializeError),
     Timer(TimerError),
-    InvalidWsFrame,
+    InvalidWsFrame(String),
 }
 
 impl From<WsError> for ClientError {
@@ -48,7 +48,7 @@ impl Display for ClientError {
             Serialize(e) => write!(fmt, "Serialize({})", e),
             Deserialize(e) => write!(fmt, "Deserialize({})", e),
             Timer(e) => write!(fmt, "Timer({})", e),
-            InvalidWsFrame => write!(fmt, "InvalidWsFrame"),
+            InvalidWsFrame(desc) => write!(fmt, "InvalidWsFrame({})", desc),
         }
     }
 }
