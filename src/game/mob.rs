@@ -21,6 +21,7 @@ impl Mob {
             PredatorMissile | GoliathMissile | MohawkMissile | TornadoSingleMissile
             | TornadoTripleMissile | ProwlerMissile => true,
             Upgrade | Shield | Inferno => false,
+            _ => unimplemented!()
         }
     }
 }
