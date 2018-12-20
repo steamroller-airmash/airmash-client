@@ -22,10 +22,10 @@ use url::Url;
 
 async fn on_login<'a>(client: &'a mut Client, _: &'a server::Login, _len: u64) -> ClientResult<()> {
     await!(client.wait(Duration::from_secs(3)))?;
-    await!(client.send(client::Command {
-        com: "respawn".to_owned(),
-        data: "2".to_owned()
-    }))?;
+    //await!(client.send(client::Command {
+    //    com: "respawn".to_owned(),
+    //    data: "2".to_owned()
+    //}))?;
 
     Ok(())
 }
@@ -74,20 +74,27 @@ async fn single_bot_inner(name: String, server: Url, i: u64) -> Result<(), Box<E
 
     // Should probably have a wait-for-login command
     r#await!(client.wait(Duration::from_secs(5)))?;
-    info!("Sending packets!");
     //r#await!(client.send(client::Command{
-      //  com: "respawn".to_owned(),
-      //  data: "3".to_owned()
+    //    com: "respawn".to_owned(),
+    //    data: "2".to_owned()
     //}))?;
 
     //let mut next = Instant::now() + Duration::from_secs(10);
 
     //r#await!(client.point_at(Position::new(5000.0, 5000.0)))?;
 
-    let id = *client.world.names.get("STEAMROLLER").unwrap();
-    info!("Following {}", id);
     while let Some(_) = r#await!(client.next())? {
+        let player = match client.world.get_me().team.0 {
+            1 => "STEAMROLLER",
+            _ => "herman"
+        };
+
+        let id = match client.world.names.get(player) {
+            Some(x) => *x,
+            None => break,
+        };
         r#await!(client.follow(id))?;
+        r#await!(client.say("FOR GONDOR!".to_string()))?;
     }
 
     info!("Shutting down bot {}", client.world.get_me().name);
@@ -105,7 +112,7 @@ async fn single_bot(name: String, server: Url, i: u64) {
 }
 
 async fn spawn_bots(name: String, url: Url) {
-    for i in 0..1 {
+    for i in 0..60 {
         tokio::spawn_async(single_bot(format!("{}{}", name, i), url.clone(), i));
         r#await!(tokio::timer::Delay::new(
             Instant::now() + Duration::from_millis(100)
@@ -125,9 +132,9 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-//const SERVER: &'static str = "wss://game.airmash.steamroller.tk/dev";
-const SERVER: &'static str = "wss://asia.airmash.online/1";
-//const SERVER: &'static str = "ws://localhost:3501";
+//const SERVER: &'static str = "wss://game.airmash.steamroller.tk/ctf";
+//const SERVER: &'static str = "wss://asia.airmash.online/ffa2";
+const SERVER: &'static str = "ws://localhost:3501";
 
 fn main() {
     env_logger::init();

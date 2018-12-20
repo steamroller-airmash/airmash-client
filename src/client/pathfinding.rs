@@ -78,7 +78,9 @@ impl Client {
             }
 
             r#await!(self.point_at(pos))?;
-            r#await!(self.wait(Duration::from_millis((self.world.ping * 2).min(1000) as u64)))?;
+            r#await!(self.wait(Duration::from_millis(
+                (self.world.ping * 2).min(1000).max(10) as u64
+            )))?;
         }
 
         r#await!(self.release_key(KeyCode::Up))
