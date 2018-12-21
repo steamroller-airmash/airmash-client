@@ -54,7 +54,6 @@ impl World {
         self.players.get_mut(&self.me.id).unwrap()
     }
 
-
     pub fn handle_packet(&mut self, packet: &ServerPacket) {
         use self::ServerPacket::*;
 
@@ -125,8 +124,7 @@ impl World {
 
         if let Some(player) = removed {
             self.names.remove(&player.name);
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerLeave, packet.id);
         }
     }
@@ -280,7 +278,9 @@ impl World {
             })
             .collect();
 
-        self.names = self.players.values()
+        self.names = self
+            .players
+            .values()
             .map(|p| (p.name.clone(), p.id))
             .collect();
     }

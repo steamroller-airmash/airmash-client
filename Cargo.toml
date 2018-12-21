@@ -32,3 +32,6 @@ env_logger = "*"
 rand = "*"
 native-tls = "*"
 #pathfinding = "*"
+
+[dev-dependencies]
+clap = "*"
