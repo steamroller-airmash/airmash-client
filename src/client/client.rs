@@ -263,7 +263,7 @@ impl Client {
     /// of the turn.
     pub async fn turn_to(&mut self, tgt: Rotation) -> ClientResult<()> {
         /// Utility since rust doesn't provide fmod
-        fn modulus<T>(a: T, b: T) -> T
+        fn fmod<T>(a: T, b: T) -> T
         where
             T: Rem<Output = T> + Add<Output = T> + Copy,
         {
@@ -276,7 +276,7 @@ impl Client {
         let rot = self.world.get_me().rot;
         let pi = Rotation::new(PI);
         let pi2 = 2.0 * pi;
-        let mut dist = modulus(tgt - rot, pi2);
+        let mut dist = fmod(tgt - rot, pi2);
 
         if dist > pi {
             dist -= pi2;
@@ -320,6 +320,9 @@ impl Client {
         r#await!(self.send(client::Say { text }))
     }
 
+    /// Wait to receive a login packet. If the
+    /// connection closes before receiving the
+    /// packet then it will return `None`.
     pub async fn wait_for_login(&mut self) -> ClientResult<Option<server::Login>> {
         use self::ClientEvent::*;
 
