@@ -62,7 +62,7 @@ async fn bot(
 
     // The name that we have on the server may not
     // be the name that was requested.
-    println!("Shutting down bot {}", client.world.get_me().name);
+    info!("Shutting down bot {}", client.world.get_me().name);
 
     Ok(())
 }
