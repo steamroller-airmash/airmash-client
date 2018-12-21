@@ -1,3 +1,10 @@
-for i in `seq 1 500`; do
-    ./target/release/airmash-client > /dev/null &2> /dev/null &
+#!/bin/bash
+
+service tor start
+
+torsocks curl -s ipinfo.io/ip
+for j in `seq 1 1`; do
+    ./airmash-client &
 done
+
+wait
