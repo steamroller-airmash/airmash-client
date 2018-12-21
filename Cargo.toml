@@ -4,21 +4,35 @@ version = "0.0.0"
 authors = ["STEAMROLLER"]
 publish = false
 license = "Apache-2.0 OR MIT"
+edition = "2018"
+
+[profile.release]
+#lto = true
 
 [features]
 admin = []
 default = ["admin"]
 
-[replace]
-# Use the github version for now
-"airmash-protocol:0.2.2" = { git="https://github.com/steamroller-airmash/airmash-protocol-rs" }
+[patch.crates-io]
+airmash-protocol = { git = "https://github.com/steamroller-airmash/airmash-protocol-rs" }
+airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-protocol-v5" }
 
 [dependencies]
-fnv = "*"
-ws = { version = "*", features=["ssl"] }
-tokio = "*"
-tokio-timer = "*"
+tokio = { version="*", features=["async-await-preview"] }
+tokio-tls = "*"
+futures = "*"
+tungstenite = "*"
+tokio-tungstenite = "*"
 airmash-protocol = "0.2"
 airmash-protocol-v5 = "0.0"
 log = "*"
-simple_logger = "*"
+hashbrown = "*"
+url = "*"
+env_logger = "*"
+rand = "*"
+native-tls = "*"
+lazy_static = "*"
+#pathfinding = "*"
+
+[dev-dependencies]
+clap = "*"
