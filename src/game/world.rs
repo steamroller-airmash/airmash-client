@@ -84,7 +84,6 @@ impl World {
             MobUpdate(p) => self.handle_mob_update(p),
             MobUpdateStationary(p) => self.handle_mob_update_stationary(p),
             MobDespawn(p) => self.handle_mob_despawn(p),
-            MobDespawnCoords(p) => self.handle_mob_despawn_coords(p),
 
             EventBoost(p) => self.handle_event_boost(p),
             EventBounce(p) => self.handle_event_bounce(p),
@@ -286,9 +285,8 @@ impl World {
         }
     }
     fn handle_player_hit(&mut self, packet: &PlayerHit) {
-        if let None = self.mobs.remove(&packet.id.into()) {
-            warn_unknown_mob!(PlayerHit, packet.id);
-        }
+        // Note: Don't delete the mob here, the server sends
+        //       a second MobDespawn packet for that.
 
         for data in packet.players.iter() {
             if let Some(player) = self.players.get_mut(&data.id.into()) {
@@ -382,8 +380,6 @@ impl World {
                 max_speed: projectile.max_speed,
                 owner: Some(packet.id.into()),
             };
-
-            info!("Created mob with id {}", mob.id);
 
             if let Some(mob) = self.mobs.insert(mob.id, mob) {
                 warn!(
@@ -522,33 +518,8 @@ impl World {
         }
     }
     fn handle_mob_despawn(&mut self, packet: &MobDespawn) {
-        if let Some(mob) = self.mobs.remove(&packet.id.into()) {
-            let ty: DespawnMobType = mob.ty.into();
-            if ty != packet.ty {
-                warn!(
-                    "Got MobDespawn packet for a mob with id {} and a type {:?} which doesn't match the recorded type of the mob which was {:?}",
-                    packet.id.0,
-                    packet.ty,
-                    mob.ty
-                );
-            }
-        } else {
+        if let None = self.mobs.remove(&packet.id.into()) {
             warn_unknown_mob!(MobDespawn, packet.id);
-        }
-    }
-    fn handle_mob_despawn_coords(&mut self, packet: &MobDespawnCoords) {
-        if let Some(mob) = self.mobs.remove(&packet.id.into()) {
-            let ty: DespawnMobType = mob.ty.into();
-            if ty != packet.ty {
-                warn!(
-                    "Got MobDespawnCoords packet for a mob with id {} and a type {:?} which doesn't match the recorded type of the mob which was {:?}",
-                    packet.id.0,
-                    packet.ty,
-                    mob.ty
-                );
-            }
-        } else {
-            warn_unknown_mob!(MobDespawnCoords, packet.id);
         }
     }
 
