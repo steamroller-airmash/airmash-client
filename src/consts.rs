@@ -1,4 +1,7 @@
 use airmash_protocol::*;
+use lazy_static::lazy_static;
+
+use crate::config::Config;
 
 pub const BASE_DIR: Vector2<f32> = Vector2 { x: 0.0, y: -1.0 };
 
@@ -18,4 +21,8 @@ pub fn rotation_rate(ty: PlaneType) -> RotationRate {
         Goliath => 0.04,
     }
     .into()
+}
+
+lazy_static! {
+    pub(crate) static ref CONFIG: Config = Config::default();
 }

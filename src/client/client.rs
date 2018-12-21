@@ -171,7 +171,7 @@ impl Client {
 
         match &val {
             Packet(p) => r#await!(self.packet_update(p))?,
-            Frame(_) => (),
+            Frame(now) => self.world.update(*now),
         }
 
         Ok(Some(val))

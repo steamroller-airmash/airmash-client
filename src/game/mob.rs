@@ -7,7 +7,7 @@ pub struct Mob {
     pub pos: Position,
     pub max_speed: Speed,
 
-    pub owner: u16,
+    pub owner: Option<u16>,
     pub id: u16,
     pub ty: MobType,
 }
@@ -21,7 +21,6 @@ impl Mob {
             PredatorMissile | GoliathMissile | MohawkMissile | TornadoSingleMissile
             | TornadoTripleMissile | ProwlerMissile => true,
             Upgrade | Shield | Inferno => false,
-            _ => unimplemented!(),
         }
     }
 }
