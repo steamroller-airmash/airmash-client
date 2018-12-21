@@ -15,6 +15,7 @@ extern crate tungstenite;
 extern crate url;
 
 mod client;
+mod config;
 mod game;
 //mod map;
 

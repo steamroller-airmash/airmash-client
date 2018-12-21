@@ -31,6 +31,7 @@ url = "*"
 env_logger = "*"
 rand = "*"
 native-tls = "*"
+lazy_static = "*"
 #pathfinding = "*"
 
 [dev-dependencies]

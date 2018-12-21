@@ -1,8 +1,10 @@
 use super::*;
 use super::{Mob, Player};
+use crate::consts::CONFIG;
 use crate::protocol::server::*;
 use crate::protocol::*;
 
+use std::ops::{Add, Rem};
 use std::time::{Duration, Instant};
 
 use hashbrown::HashMap;
@@ -21,6 +23,7 @@ pub struct World {
     pub ping: u16,
     pub players_game: u32,
     pub players_total: u32,
+    pub last_frame: Option<Instant>,
 }
 
 macro_rules! warn_unknown {
@@ -78,6 +81,11 @@ impl World {
             PlayerFlag(p) => self.handle_player_flag(p),
             PingResult(p) => self.handle_ping_result(p),
 
+            MobUpdate(p) => self.handle_mob_update(p),
+            MobUpdateStationary(p) => self.handle_mob_update_stationary(p),
+            MobDespawn(p) => self.handle_mob_despawn(p),
+            MobDespawnCoords(p) => self.handle_mob_despawn_coords(p),
+
             EventBoost(p) => self.handle_event_boost(p),
             EventBounce(p) => self.handle_event_bounce(p),
             EventLeaveHorizon(p) => self.handle_event_leave_horizon(p),
@@ -87,7 +95,156 @@ impl World {
         }
     }
 
-    pub fn update(&mut self, _now: Instant) {}
+    pub fn update(&mut self, now: Instant) {
+        let last = self.last_frame.unwrap_or(now);
+        self.last_frame = Some(now);
+
+        let delta = (now - last).into();
+
+        for player in self.players.values_mut() {
+            Self::update_player(player, delta);
+        }
+
+        for mob in self.mobs.values_mut() {
+            Self::update_mob(mob, delta);
+        }
+    }
+}
+
+/// Utility since rust doesn't provide fmod
+fn fmod<T>(a: T, b: T) -> T
+where
+    T: Rem<Output = T> + Add<Output = T> + Copy,
+{
+    (a % b + b) % b
+}
+
+/// Frame update details
+impl World {
+    fn update_player(player: &mut Player, delta: Time) {
+        use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
+        #[allow(non_upper_case_globals)]
+        const PIx2: f32 = PI * 2.0;
+
+        let mut movement_angle = None;
+        let info = &CONFIG.planes[player.plane];
+        let boost_factor = match player.keystate.boost {
+            true => info.boost_factor,
+            false => 1.0,
+        };
+        let ref keystate = player.keystate;
+
+        if keystate.strafe {
+            if keystate.left {
+                movement_angle = Some(player.rot - FRAC_PI_2.into());
+            }
+            if keystate.right {
+                movement_angle = Some(player.rot + FRAC_PI_2.into());
+            }
+        } else {
+            if keystate.left {
+                player.rot -= delta * info.turn_factor;
+            }
+            if keystate.right {
+                player.rot += delta * info.turn_factor;
+            }
+        }
+
+        if keystate.up {
+            if let Some(angle) = movement_angle {
+                if keystate.right {
+                    movement_angle = Some(angle - FRAC_PI_4.into());
+                } else if keystate.left {
+                    movement_angle = Some(angle + FRAC_PI_4.into());
+                }
+            } else {
+                movement_angle = Some(player.rot)
+            }
+        } else if keystate.down {
+            if let Some(angle) = movement_angle {
+                if keystate.right {
+                    movement_angle = Some(angle + FRAC_PI_4.into());
+                } else if keystate.left {
+                    movement_angle = Some(angle - FRAC_PI_4.into());
+                }
+            } else {
+                movement_angle = Some(player.rot + PI.into());
+            }
+        }
+
+        if let Some(angle) = movement_angle {
+            let mult = info.accel_factor * delta * boost_factor;
+            player.vel += Velocity::new(mult * angle.sin(), mult * -angle.cos());
+        }
+
+        let oldspeed = player.vel;
+        let speed_len = player.vel.length();
+        let mut max_speed = info.max_speed * boost_factor;
+        let min_speed = info.min_speed;
+
+        if player.upgrades.speed != 0 {
+            max_speed *= CONFIG.upgrades.speed.factor[player.upgrades.speed as usize];
+        }
+
+        if player.upgrades.inferno {
+            max_speed *= info.inferno_factor;
+        }
+
+        if player.keystate.flagspeed {
+            max_speed = info.flag_speed;
+        }
+
+        if speed_len > max_speed {
+            player.vel *= max_speed / speed_len;
+        } else {
+            if player.vel.x.abs() > min_speed || player.vel.y.abs() > max_speed {
+                player.vel *= 1.0 - (info.brake_factor * delta).inner();
+            } else {
+                player.vel = Velocity::default();
+            }
+        }
+
+        player.pos += oldspeed * delta + (player.vel - oldspeed) * delta * 0.5;
+        player.rot = fmod(player.rot, PIx2.into());
+
+        let bound = Position::new(16352.0, 8160.0);
+
+        if player.pos.x.abs() > bound.x {
+            player.pos.x = player.pos.x.signum() * bound.x
+        }
+        if player.pos.y.abs() > bound.y {
+            player.pos.y = player.pos.y.signum() * bound.y
+        }
+    }
+    fn update_mob(mob: &mut Mob, delta: Time) {
+        const BOUNDARY_X: f32 = 16384.0;
+        const BOUNDARY_Y: f32 = BOUNDARY_X / 2.0;
+        const SIZE_X: f32 = BOUNDARY_X * 2.0;
+        const SIZE_Y: f32 = BOUNDARY_Y * 2.0;
+
+        let prev_vel = mob.vel;
+        mob.vel += mob.vel.normalized() * mob.accel * delta;
+
+        let speed = mob.vel.length();
+        if speed > mob.max_speed {
+            mob.vel *= mob.max_speed / speed;
+        }
+
+        mob.pos += prev_vel * delta + (mob.vel - prev_vel) * delta * 0.5;
+
+        if mob.pos.x < (-BOUNDARY_X).into() {
+            mob.pos.x += SIZE_X.into()
+        }
+        if mob.pos.x > BOUNDARY_X.into() {
+            mob.pos.x -= SIZE_X.into()
+        }
+        if mob.pos.y < (-BOUNDARY_Y).into() {
+            mob.pos.y += SIZE_Y.into()
+        }
+        if mob.pos.y > BOUNDARY_Y.into() {
+            mob.pos.y -= SIZE_Y.into()
+        }
+    }
 }
 
 // Packet handling details
@@ -223,8 +380,10 @@ impl World {
                 vel: projectile.speed,
                 accel: projectile.accel,
                 max_speed: projectile.max_speed,
-                owner: packet.id.into(),
+                owner: Some(packet.id.into()),
             };
+
+            info!("Created mob with id {}", mob.id);
 
             if let Some(mob) = self.mobs.insert(mob.id, mob) {
                 warn!(
@@ -315,6 +474,82 @@ impl World {
         self.ping = packet.ping;
         self.players_game = packet.players_game;
         self.players_total = packet.players_total;
+    }
+
+    fn handle_mob_update(&mut self, packet: &MobUpdate) {
+        if let Some(mob) = self.mobs.get_mut(&packet.id.into()) {
+            mob.vel = packet.speed;
+            mob.pos = packet.pos;
+            mob.max_speed = packet.max_speed;
+            mob.ty = packet.ty;
+            mob.accel = packet.accel;
+        } else {
+            let mob = Mob {
+                pos: packet.pos,
+                vel: packet.speed,
+                accel: packet.accel,
+                max_speed: packet.max_speed,
+                ty: packet.ty,
+                id: packet.id.into(),
+                // Don't know the owner of this mob
+                owner: None,
+            };
+
+            self.mobs.insert(packet.id.into(), mob);
+        }
+    }
+    fn handle_mob_update_stationary(&mut self, packet: &MobUpdateStationary) {
+        if let Some(mob) = self.mobs.get_mut(&packet.id.into()) {
+            mob.pos = packet.pos;
+            mob.ty = packet.ty;
+        } else {
+            let mob = Mob {
+                id: packet.id.into(),
+                pos: packet.pos,
+                ty: packet.ty,
+                // This mob is an upgrade/powerup
+                // it has no owner.
+                owner: None,
+
+                // All other fields are 0, which is
+                // accurate.
+                vel: Default::default(),
+                accel: Default::default(),
+                max_speed: Default::default(),
+            };
+
+            self.mobs.insert(packet.id.into(), mob);
+        }
+    }
+    fn handle_mob_despawn(&mut self, packet: &MobDespawn) {
+        if let Some(mob) = self.mobs.remove(&packet.id.into()) {
+            let ty: DespawnMobType = mob.ty.into();
+            if ty != packet.ty {
+                warn!(
+                    "Got MobDespawn packet for a mob with id {} and a type {:?} which doesn't match the recorded type of the mob which was {:?}",
+                    packet.id.0,
+                    packet.ty,
+                    mob.ty
+                );
+            }
+        } else {
+            warn_unknown_mob!(MobDespawn, packet.id);
+        }
+    }
+    fn handle_mob_despawn_coords(&mut self, packet: &MobDespawnCoords) {
+        if let Some(mob) = self.mobs.remove(&packet.id.into()) {
+            let ty: DespawnMobType = mob.ty.into();
+            if ty != packet.ty {
+                warn!(
+                    "Got MobDespawnCoords packet for a mob with id {} and a type {:?} which doesn't match the recorded type of the mob which was {:?}",
+                    packet.id.0,
+                    packet.ty,
+                    mob.ty
+                );
+            }
+        } else {
+            warn_unknown_mob!(MobDespawnCoords, packet.id);
+        }
     }
 
     fn handle_event_boost(&mut self, evt: &EventBoost) {
