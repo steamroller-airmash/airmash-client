@@ -86,7 +86,7 @@ async fn single_bot_inner(name: String, server: Url, i: u64) -> Result<(), Box<E
     while let Some(_) = r#await!(client.next())? {
         let player = match client.world.get_me().team.0 {
             1 => "STEAMROLLER",
-            _ => "herman"
+            _ => "herman",
         };
 
         let id = match client.world.names.get(player) {
@@ -112,7 +112,7 @@ async fn single_bot(name: String, server: Url, i: u64) {
 }
 
 async fn spawn_bots(name: String, url: Url) {
-    for i in 0..60 {
+    for i in 0..120 {
         tokio::spawn_async(single_bot(format!("{}{}", name, i), url.clone(), i));
         r#await!(tokio::timer::Delay::new(
             Instant::now() + Duration::from_millis(100)

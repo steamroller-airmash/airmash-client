@@ -51,7 +51,7 @@ type ClientStream = futures::stream::Fuse<
                 ParsePacketFn,
                 Result<Option<ClientEvent>, ClientError>,
             >,
-            fn(Option<ClientEvent>) -> Option<ClientEvent>
+            fn(Option<ClientEvent>) -> Option<ClientEvent>,
         >,
         futures::stream::Map<
             futures::stream::MapErr<Interval, FromFn<tokio::timer::Error, ClientError>>,
@@ -85,10 +85,11 @@ fn parse_packet(msg: Message) -> Result<Option<ClientEvent>, ClientError> {
         Message::Ping(_) => return Ok(None),
         Message::Pong(_) => return Ok(None),
         Message::Text(txt) => {
-            return Err(ClientError::InvalidWsFrame(
-                format!("Server sent a text frame with body: {:?}", txt)
-            ));
-        },
+            return Err(ClientError::InvalidWsFrame(format!(
+                "Server sent a text frame with body: {:?}",
+                txt
+            )));
+        }
     };
 
     ProtocolV5 {}
@@ -317,5 +318,17 @@ impl Client {
     /// Say something in a text bubble
     pub async fn say(&mut self, text: String) -> ClientResult<()> {
         r#await!(self.send(client::Say { text }))
+    }
+
+    pub async fn wait_for_login(&mut self) -> ClientResult<Option<server::Login>> {
+        use self::ClientEvent::*;
+
+        while let Some(x) = r#await!(self.next())? {
+            if let Packet(ServerPacket::Login(p)) = x {
+                return Ok(Some(p));
+            }
+        }
+
+        Ok(None)
     }
 }
