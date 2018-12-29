@@ -1,6 +1,6 @@
 //!
 
-#![feature(futures_api, await_macro, euclidean_division, core_intrinsics)]
+#![feature(futures_api, await_macro)]
 
 #[macro_use]
 extern crate log;
