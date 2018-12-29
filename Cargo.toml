@@ -14,6 +14,8 @@ admin = []
 default = ["admin"]
 
 [patch.crates-io]
+# Remove when tokio-async-await gets updated
+tokio-async-await = { git = "https://github.com/tokio-rs/tokio" }
 airmash-protocol = { git = "https://github.com/steamroller-airmash/airmash-protocol-rs" }
 airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-protocol-v5" }
 
