@@ -19,18 +19,18 @@ use super::{ClientError, ClientResult};
 use crate::consts;
 use crate::game::World;
 
-type ClientSink = futures::stream::SplitSink<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::stream::Stream<
-            tokio::net::TcpStream,
-            tokio_tls::TlsStream<tokio::net::TcpStream>,
-        >,
-    >,
->;
-
 type FromFn<T, U> = fn(T) -> U;
 type ParseTimeFn = fn(std::time::Instant) -> ClientEvent;
 type ParsePacketFn = fn(tungstenite::Message) -> Result<Option<ClientEvent>, ClientError>;
+
+type WebSocketStream = tokio_tungstenite::WebSocketStream<
+    tokio_tungstenite::stream::Stream<
+        tokio::net::TcpStream,
+        tokio_tls::TlsStream<tokio::net::TcpStream>,
+    >,
+>;
+
+type ClientSink = futures::stream::SplitSink<WebSocketStream>;
 
 // This is ugly, but it means that client doesn't need type parameters
 type ClientStream = futures::stream::Fuse<
@@ -38,14 +38,7 @@ type ClientStream = futures::stream::Fuse<
         futures::stream::FilterMap<
             futures::stream::AndThen<
                 futures::stream::MapErr<
-                    futures::stream::SplitStream<
-                        tokio_tungstenite::WebSocketStream<
-                            tokio_tungstenite::stream::Stream<
-                                tokio::net::TcpStream,
-                                tokio_tls::TlsStream<tokio::net::TcpStream>,
-                            >,
-                        >,
-                    >,
+                    futures::stream::SplitStream<WebSocketStream>,
                     FromFn<tungstenite::Error, ClientError>,
                 >,
                 ParsePacketFn,
@@ -105,9 +98,7 @@ fn parse_time(inst: Instant) -> ClientEvent {
 
 // Base functions
 impl Client {
-    pub async fn new(url: Url) -> Result<Self, ClientError> {
-        let (ws_stream, _) = r#await!(connect_async(url))?;
-
+    fn new_internal(ws_stream: WebSocketStream) -> Self {
         let (sink, stream) = ws_stream.split();
 
         let stream1 = stream
@@ -118,11 +109,28 @@ impl Client {
             .map_err(ClientError::from as FromFn<_, _>)
             .map(parse_time as ParseTimeFn);
 
-        Ok(Self {
+        Self {
             world: World::default(),
             sink: Some(sink),
             stream: stream1.select(stream2).fuse(),
-        })
+        }
+    }
+
+    pub async fn new(url: Url) -> Result<Self, ClientError> {
+        let (ws_stream, _) = r#await!(connect_async(url))?;
+
+        Ok(Self::new_internal(ws_stream))
+    }
+    pub async fn with_tls_stream(
+        url: Url,
+        stream: tokio_tls::TlsStream<tokio::net::TcpStream>,
+    ) -> Result<Self, ClientError> {
+        use tokio_tungstenite::client_async;
+        use tokio_tungstenite::stream::Stream;
+
+        let (ws_stream, _) = r#await!(client_async(url, Stream::Tls(stream)))?;
+
+        Ok(Self::new_internal(ws_stream))
     }
 
     async fn send_buf(&mut self, buf: Vec<u8>) -> Result<(), ClientError> {
