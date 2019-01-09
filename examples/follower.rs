@@ -26,7 +26,7 @@ async fn bot(
     flag: String,
     target: String,
 ) -> Result<(), Box<Error + 'static>> {
-    let mut client = r#await!(Client::new(server))?;
+    let mut client = r#await!(Client::new_insecure(server))?;
 
     r#await!(client.send(client::Login {
         flag,

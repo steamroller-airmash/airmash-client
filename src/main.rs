@@ -59,7 +59,7 @@ async fn on_packet<'a>(client: &'a mut Client, packet: ServerPacket, len: u64) -
 async fn single_bot_inner(name: String, server: Url, i: u64) -> Result<(), Box<Error + 'static>> {
     //use self::ClientEvent::*;
 
-    let mut client = r#await!(Client::new(server))?;
+    let mut client = r#await!(Client::new_insecure(server))?;
 
     r#await!(client.wait(Duration::from_millis(100 * i)))?;
 
@@ -86,7 +86,7 @@ async fn single_bot_inner(name: String, server: Url, i: u64) -> Result<(), Box<E
     while let Some(_) = r#await!(client.next())? {
         let player = match client.world.get_me().team.0 {
             1 => "STEAMROLLER",
-            _ => "herman",
+            _ => "STEAMROLLER",
         };
 
         let id = match client.world.names.get(player) {
@@ -112,7 +112,7 @@ async fn single_bot(name: String, server: Url, i: u64) {
 }
 
 async fn spawn_bots(name: String, url: Url) {
-    for i in 0..50 {
+    for i in 0..2 {
         tokio::spawn_async(single_bot(format!("{}{}", name, i), url.clone(), i));
         r#await!(tokio::timer::Delay::new(
             Instant::now() + Duration::from_millis(100)
@@ -133,10 +133,11 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
 }
 
 //const SERVER: &'static str = "wss://game.airmash.steamroller.tk/ctf";
-//const SERVER: &'static str = "wss://asia.airmash.online/ffa2";
-const SERVER: &'static str = "ws://localhost:3501";
+const SERVER: &'static str = "wss://game-us-s1.airma.sh/ffa2";
+//const SERVER: &'static str = "ws://localhost:3501";
 
 fn main() {
+    env::set_var("RUST_LOG", "info");
     env_logger::init();
 
     if let Err(e) = run_bot("TESTBOT", SERVER) {
