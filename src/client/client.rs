@@ -1,6 +1,7 @@
 use url::Url;
 
 use std::f32::consts::PI;
+use std::net::ToSocketAddrs;
 use std::ops::{Add, Rem};
 use std::time::{Duration, Instant};
 
@@ -92,6 +93,33 @@ fn parse_packet(msg: Message) -> Result<Option<ClientEvent>, ClientError> {
         .map_err(Into::into)
 }
 
+async fn connect_insecure(
+    server: &Url,
+) -> Result<tokio_tls::TlsStream<tokio::net::TcpStream>, ClientError> {
+    use tokio::net::TcpStream;
+    use tokio_tls::TlsConnector;
+
+    let socket_addr = server
+        .to_socket_addrs()
+        .map_err(|x| ClientError::WebSocket(x.into()))?
+        .next()
+        // FIXME: Create a result instead
+        .expect("Provided URL did not map to an address");
+
+    let tcp_stream =
+        r#await!(TcpStream::connect(&socket_addr)).map_err(|x| ClientError::WebSocket(x.into()))?;
+    let nattls_connector = native_tls::TlsConnector::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|x| ClientError::WebSocket(x.into()))?;
+
+    let stream = TlsConnector::from(nattls_connector).connect(server.as_str(), tcp_stream);
+
+    let stream = r#await!(stream).map_err(|x| ClientError::WebSocket(x.into()))?;
+
+    Ok(stream)
+}
+
 fn parse_time(inst: Instant) -> ClientEvent {
     ClientEvent::Frame(inst)
 }
@@ -115,13 +143,7 @@ impl Client {
             stream: stream1.select(stream2).fuse(),
         }
     }
-
-    pub async fn new(url: Url) -> Result<Self, ClientError> {
-        let (ws_stream, _) = r#await!(connect_async(url))?;
-
-        Ok(Self::new_internal(ws_stream))
-    }
-    pub async fn with_tls_stream(
+    async fn from_tls_stream(
         url: Url,
         stream: tokio_tls::TlsStream<tokio::net::TcpStream>,
     ) -> Result<Self, ClientError> {
@@ -131,6 +153,17 @@ impl Client {
         let (ws_stream, _) = r#await!(client_async(url, Stream::Tls(stream)))?;
 
         Ok(Self::new_internal(ws_stream))
+    }
+
+    pub async fn new(url: Url) -> Result<Self, ClientError> {
+        let (ws_stream, _) = r#await!(connect_async(url))?;
+
+        Ok(Self::new_internal(ws_stream))
+    }
+    pub async fn new_insecure(url: Url) -> Result<Self, ClientError> {
+        let stream = r#await!(connect_insecure(&url))?;
+
+        r#await!(Self::from_tls_stream(url, stream))
     }
 
     async fn send_buf(&mut self, buf: Vec<u8>) -> Result<(), ClientError> {

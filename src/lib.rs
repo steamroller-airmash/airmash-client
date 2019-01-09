@@ -1,6 +1,6 @@
 //!
 
-#![feature(futures_api, await_macro)]
+#![feature(futures_api, await_macro, async_await)]
 
 #[macro_use]
 extern crate log;

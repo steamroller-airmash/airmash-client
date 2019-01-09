@@ -628,6 +628,6 @@ impl World {
     }
 
     fn handle_error(&mut self, evt: &Error) {
-        info!("{:?}", evt.error);
+        error!("{:?}", evt.error);
     }
 }
