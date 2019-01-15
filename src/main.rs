@@ -132,8 +132,8 @@ fn run_bot(name: &str, server: &str) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-//const SERVER: &'static str = "wss://game.airmash.steamroller.tk/ctf";
-const SERVER: &'static str = "wss://game-us-s1.airma.sh/ffa2";
+const SERVER: &'static str = "wss://game.airmash.steamroller.tk/ffa";
+//const SERVER: &'static str = "wss://game-us-s1.airma.sh/ffa2";
 //const SERVER: &'static str = "ws://localhost:3501";
 
 fn main() {
