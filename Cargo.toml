@@ -15,12 +15,11 @@ default = ["admin"]
 
 [patch.crates-io]
 # Remove when tokio-async-await gets updated
-tokio-async-await = { git = "https://github.com/tokio-rs/tokio" }
 airmash-protocol = { git = "https://github.com/steamroller-airmash/airmash-protocol-rs" }
 airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-protocol-v5" }
 
 [dependencies]
-tokio = { version="*", features=["async-await-preview"] }
+tokio = { version=">=0.1.14", features=["async-await-preview"] }
 tokio-tls = "*"
 futures = "*"
 tungstenite = "*"
