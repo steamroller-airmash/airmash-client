@@ -6,11 +6,12 @@ use airmash_protocol::*;
 
 use super::*;
 use crate::consts::BASE_DIR;
+use crate::Handler;
 //use crate::map::MAP;
 
 use protocol::Position;
 
-impl Client {
+impl<H: Handler> Client<H> {
     fn calc_angle(&mut self, pos: Position) -> f32 {
         let rel = (pos - self.world.get_me().pos).normalized();
         let mut angle = Vector2::dot(rel, BASE_DIR).acos();

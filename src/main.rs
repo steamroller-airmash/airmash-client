@@ -1,5 +1,4 @@
 #![feature(futures_api, await_macro, async_await)]
-#![allow(dead_code)]
 
 extern crate airmash_client;
 #[macro_use]
@@ -10,7 +9,6 @@ extern crate tokio;
 extern crate url;
 
 use airmash_client::protocol::*;
-use airmash_client::protocol::{KeyCode, ServerPacket};
 use airmash_client::*;
 
 use std::env;
@@ -19,42 +17,6 @@ use std::time::{Duration, Instant};
 
 use tokio::r#await;
 use url::Url;
-
-async fn on_login<'a>(client: &'a mut Client, _: &'a server::Login, _len: u64) -> ClientResult<()> {
-    await!(client.wait(Duration::from_secs(3)))?;
-    //await!(client.send(client::Command {
-    //    com: "respawn".to_owned(),
-    //    data: "2".to_owned()
-    //}))?;
-
-    Ok(())
-}
-
-async fn on_player_respawn<'a>(
-    client: &'a mut Client,
-    packet: &'a server::PlayerRespawn,
-) -> ClientResult<()> {
-    let me = client.world.me.id;
-
-    if packet.id.0 == me {
-        await!(client.press_key(KeyCode::Right))?;
-        await!(client.press_key(KeyCode::Fire))?;
-    }
-
-    Ok(())
-}
-
-async fn on_packet<'a>(client: &'a mut Client, packet: ServerPacket, len: u64) -> ClientResult<()> {
-    use self::ServerPacket::*;
-
-    match packet {
-        Login(x) => await!(on_login(client, &x, len))?,
-        PlayerRespawn(x) => await!(on_player_respawn(client, &x))?,
-        _ => (),
-    }
-
-    Ok(())
-}
 
 async fn single_bot_inner(name: String, server: Url, i: u64) -> Result<(), Box<Error + 'static>> {
     //use self::ClientEvent::*;

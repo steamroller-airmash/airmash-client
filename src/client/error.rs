@@ -14,6 +14,7 @@ pub enum ClientError {
     Deserialize(DeserializeError),
     Timer(TimerError),
     InvalidWsFrame(String),
+    Custom(Box<Error + Send + 'static>),
 }
 
 impl From<WsError> for ClientError {
@@ -49,6 +50,7 @@ impl Display for ClientError {
             Deserialize(e) => write!(fmt, "Deserialize({})", e),
             Timer(e) => write!(fmt, "Timer({})", e),
             InvalidWsFrame(desc) => write!(fmt, "InvalidWsFrame({})", desc),
+            Custom(e) => write!(fmt, "Custom({})", e),
         }
     }
 }
