@@ -19,7 +19,6 @@ use airmash_protocol_v5::ProtocolV5;
 use super::{ClientError, ClientResult};
 use crate::consts;
 use crate::game::World;
-use crate::Handler;
 
 type FromFn<T, U> = fn(T) -> U;
 type ParseTimeFn = fn(std::time::Instant) -> ClientEvent;
@@ -62,9 +61,8 @@ pub enum ClientEvent {
     Packet(ServerPacket),
 }
 
-pub struct Client<H> {
+pub struct Client {
     pub world: World,
-    pub handler: H,
     sink: Option<ClientSink>,
     stream: ClientStream,
 }
@@ -127,7 +125,7 @@ fn parse_time(inst: Instant) -> ClientEvent {
 }
 
 // Base functions
-impl Client<()> {
+impl Client {
     fn new_internal(ws_stream: WebSocketStream) -> Self {
         let (sink, stream) = ws_stream.split();
 
@@ -141,7 +139,6 @@ impl Client<()> {
 
         Self {
             world: World::default(),
-            handler: (),
             sink: Some(sink),
             stream: stream1.select(stream2).fuse(),
         }
@@ -168,10 +165,7 @@ impl Client<()> {
 
         r#await!(Self::from_tls_stream(url, stream))
     }
-}
 
-// Requires H: Handler
-impl<H: Handler> Client<H> {
     async fn send_buf(&mut self, buf: Vec<u8>) -> Result<(), ClientError> {
         let sink = self.sink.take().unwrap();
         let msg = Message::Binary(buf);
@@ -221,16 +215,12 @@ impl<H: Handler> Client<H> {
             Frame(now) => self.world.update(*now),
         }
 
-        if let Some(packet) = self.handler.on_event(&val)? {
-            r#await!(self.send(packet))?;
-        }
-
         Ok(Some(val))
     }
 }
 
 // Helper functions
-impl<H: Handler> Client<H> {
+impl Client {
     /// Press or release a key.
     ///
     /// This corresponds to the [`Key`] client packet.
