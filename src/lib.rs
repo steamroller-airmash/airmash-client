@@ -16,7 +16,9 @@ extern crate url;
 
 mod client;
 mod config;
+mod future;
 mod game;
+mod macros;
 //mod map;
 
 pub mod consts;

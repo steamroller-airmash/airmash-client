@@ -49,7 +49,7 @@ async fn bot(
     r#await!(client.wait_for_login())?;
 
     while let Some(_) = r#await!(client.next())? {
-        let id = match client.world.names.get(&target) {
+        let id = match client.world().names.get(&target) {
             Some(x) => *x,
             // If there is no player with that name,
             // then we'll shut down the bot.
@@ -62,7 +62,7 @@ async fn bot(
 
     // The name that we have on the server may not
     // be the name that was requested.
-    info!("Shutting down bot {}", client.world.get_me().name);
+    info!("Shutting down bot {}", client.world().get_me().name);
 
     Ok(())
 }

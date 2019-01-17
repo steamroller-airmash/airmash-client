@@ -46,12 +46,12 @@ async fn single_bot_inner(name: String, server: Url, i: u64) -> Result<(), Box<E
     //r#await!(client.point_at(Position::new(5000.0, 5000.0)))?;
 
     while let Some(_) = r#await!(client.next())? {
-        let player = match client.world.get_me().team.0 {
+        let player = match client.world().get_me().team.0 {
             1 => "STEAMROLLER",
             _ => "STEAMROLLER",
         };
 
-        let id = match client.world.names.get(player) {
+        let id = match client.world().names.get(player) {
             Some(x) => *x,
             None => break,
         };
@@ -59,7 +59,7 @@ async fn single_bot_inner(name: String, server: Url, i: u64) -> Result<(), Box<E
         r#await!(client.say("FOR GONDOR!".to_string()))?;
     }
 
-    info!("Shutting down bot {}", client.world.get_me().name);
+    info!("Shutting down bot {}", client.world().get_me().name);
 
     Ok(())
 }
