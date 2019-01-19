@@ -20,7 +20,8 @@ use crate::ClientEvent;
 pub type ClientFuture<'a, T> = Box<dyn Future<Output = Result<T, ClientError>> + Send + 'a>;
 
 pub trait Client {
-    fn world(&mut self) -> &mut World;
+    fn world(&self) -> &World;
+    fn world_mut(&mut self) -> &mut World;
     fn _next<'a>(&'a mut self) -> ClientFuture<'a, Option<ClientEvent>>;
     fn _send_buf<'a>(&'a mut self, buf: Vec<u8>) -> ClientFuture<'a, ()>;
 }
@@ -30,8 +31,11 @@ pub struct ImplClient<T: Client + Sized>(T);
 
 // Bridge functions
 impl<T: Client> ImplClient<T> {
-    pub(crate) fn world(&mut self) -> &mut World {
+    pub(crate) fn world(&self) -> &World {
         self.0.world()
+    }
+    pub(crate) fn world_mut(&mut self) -> &mut World {
+        self.0.world_mut()
     }
     pub(self) fn _next<'a>(&'a mut self) -> ClientFuture<'a, Option<ClientEvent>> {
         self.0._next()
@@ -85,7 +89,7 @@ impl<T: Client> ImplClient<T> {
         use airmash_protocol::client::Key;
 
         let seq = self.world().key_seq;
-        self.world().key_seq += 1;
+        self.world_mut().key_seq += 1;
 
         r#await!(self.send(Key { key, seq, state }))
     }

@@ -55,13 +55,16 @@ type ClientStream = futures::stream::Fuse<
 >;
 
 pub struct ClientBase {
-    world: World,
+    pub world: World,
     sink: Option<ClientSink>,
     stream: ClientStream,
 }
 
 impl Client for ClientBase {
-    fn world(&mut self) -> &mut World {
+    fn world(&self) -> &World {
+        &self.world
+    }
+    fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
 
