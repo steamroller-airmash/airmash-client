@@ -14,9 +14,8 @@ admin = []
 default = ["admin"]
 
 [patch.crates-io]
-# Remove when tokio-async-await gets updated
-airmash-protocol = { git = "https://github.com/steamroller-airmash/airmash-protocol-rs" }
-airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-protocol-v5" }
+#airmash-protocol = { git = "https://github.com/steamroller-airmash/airmash-protocol-rs" }
+#airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-protocol-v5" }
 
 [dependencies]
 tokio = { version=">=0.1.14", features=["async-await-preview"] }
@@ -24,8 +23,8 @@ tokio-tls = "*"
 futures = "*"
 tungstenite = "*"
 tokio-tungstenite = "*"
-airmash-protocol = "0.2"
-airmash-protocol-v5 = "0.0"
+airmash-protocol = "0.3"
+airmash-protocol-v5 = "0.0.4"
 log = "*"
 hashbrown = "*"
 url = "*"
@@ -33,7 +32,6 @@ env_logger = "*"
 rand = "*"
 native-tls = "*"
 lazy_static = "*"
-#pathfinding = "*"
 
 [dev-dependencies]
 clap = "*"
