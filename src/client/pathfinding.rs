@@ -12,8 +12,8 @@ use protocol::Position;
 
 impl Client {
     fn calc_angle(&mut self, pos: Position) -> f32 {
-        let rel = (pos - self.world.get_me().pos).normalized();
-        let mut angle = Vector2::dot(rel, BASE_DIR).acos();
+        let rel = (pos - self.world.get_me().pos).normalize();
+        let mut angle = Vector2::dot(&rel, &BASE_DIR).acos();
 
         if rel.x < 0.0.into() {
             angle = 2.0 * PI - angle;
@@ -23,66 +23,66 @@ impl Client {
     }
 
     pub async fn run_straight_at(&mut self, pos: Position) -> ClientResult<()> {
-        r#await!(self.point_at(pos))?;
-        r#await!(self.press_key(KeyCode::Up))?;
-        r#await!(self.wait(Duration::from_millis(self.world.ping as u64 * 2)))?;
+        (self.point_at(pos)).await?;
+        (self.press_key(KeyCode::Up)).await?;
+        (self.wait(Duration::from_millis(self.world.ping as u64 * 2))).await?;
 
-        while let Some(_) = r#await!(self.next())? {
-            let dist = (pos - self.world.get_me().pos).length();
+        while let Some(_) = self.next().await? {
+            let dist = (pos - self.world.get_me().pos).norm();
             let angle = self.calc_angle(pos);
 
             if angle > 1.0 {
-                if dist.inner() < 500.0 {
-                    r#await!(self.release_key(KeyCode::Up))?;
+                if dist < 500.0 {
+                    self.release_key(KeyCode::Up).await?;
                 }
 
-                r#await!(self.point_at(pos))?;
+                self.point_at(pos).await?;
 
-                if dist.inner() < 500.0 || !self.world.get_me().keystate.up {
-                    r#await!(self.press_key(KeyCode::Up))?;
+                if dist < 500.0 || !self.world.get_me().keystate.up {
+                    self.press_key(KeyCode::Up).await?;
                 }
 
-                r#await!(self.wait(Duration::from_millis(self.world.ping.into())))?;
+                self.wait(Duration::from_millis(self.world.ping.into())).await?;
             }
 
-            if dist.inner() < 100.0 {
+            if dist < 100.0 {
                 break;
             }
         }
 
-        r#await!(self.press_key(KeyCode::Down))?;
-        r#await!(self.wait(Duration::from_millis(100)))?;
-        r#await!(self.release_key(KeyCode::Down))?;
+        self.press_key(KeyCode::Down).await?;
+        self.wait(Duration::from_millis(100)).await?;
+        self.release_key(KeyCode::Down).await?;
 
-        r#await!(self.release_key(KeyCode::Up))
+        self.release_key(KeyCode::Up).await
     }
 
     pub async fn follow(&mut self, player: u16) -> ClientResult<()> {
         let mut pos;
         let mut prev = Instant::now();
-        r#await!(self.press_key(KeyCode::Up))?;
-        while let Some(_) = r#await!(self.next())? {
+        self.press_key(KeyCode::Up).await?;
+        while let Some(_) = self.next().await? {
             if let Some(p) = self.world.players.get(&player) {
                 pos = p.pos;
 
                 let mypos = self.world.get_me().pos;
-                if (pos - mypos).length() < 200.0.into() {
+                if (pos - mypos).norm() < 200.0 {
                     //break;
                 }
             } else {
                 break;
             }
             if Instant::now() - prev > Duration::from_millis(500) {
-                r#await!(self.press_key(KeyCode::Up))?;
+                self.press_key(KeyCode::Up).await?;
                 prev = Instant::now();
             }
 
-            r#await!(self.point_at(pos))?;
-            r#await!(self.wait(Duration::from_millis(
+            self.point_at(pos).await?;
+            self.wait(Duration::from_millis(
                 (self.world.ping * 2).min(1000).max(10) as u64
-            )))?;
+            )).await?;
         }
 
-        r#await!(self.release_key(KeyCode::Up))
+        self.release_key(KeyCode::Up).await
     }
 }

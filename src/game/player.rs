@@ -1,9 +1,11 @@
+use bstr::BString;
+
 use crate::protocol::server::*;
 use crate::protocol::*;
 
 #[derive(Default, Debug, Clone)]
 pub struct Player {
-    pub name: String,
+    pub name: BString,
     pub flag: FlagCode,
     pub id: u16,
     pub team: Team,

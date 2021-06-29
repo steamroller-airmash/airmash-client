@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+use bstr::BString;
+
 #[derive(Debug, Default, Copy, Clone)]
 pub struct ClientUpgrades {
     pub speed: u8,
@@ -9,11 +11,22 @@ pub struct ClientUpgrades {
     pub unused: u16,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct CurrentPlayer {
     pub id: u16,
     pub upgrades: ClientUpgrades,
     pub powerup_expiry: Option<Instant>,
 
-    pub token: String,
+    pub token: BString,
+}
+
+impl Default for CurrentPlayer {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            upgrades: ClientUpgrades::default(),
+            powerup_expiry: None,
+            token: String::default().into()
+        }
+    }
 }

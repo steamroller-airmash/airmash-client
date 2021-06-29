@@ -5,6 +5,7 @@ use crate::protocol::*;
 
 use std::time::{Duration, Instant};
 
+use bstr::BString;
 use hashbrown::HashMap;
 
 #[derive(Default, Debug, Clone)]
@@ -12,10 +13,10 @@ pub struct World {
     pub me: CurrentPlayer,
     pub mobs: HashMap<u16, Mob>,
     pub players: HashMap<u16, Player>,
-    pub names: HashMap<String, u16>,
+    pub names: HashMap<BString, u16>,
 
     pub game_ty: GameType,
-    pub room: String,
+    pub room: BString,
     pub clock: u32,
     pub key_seq: u32,
     pub ping: u16,
@@ -29,7 +30,7 @@ macro_rules! warn_unknown {
             "Received {} for unknown {} with id {}",
             stringify!($ty),
             $class,
-            $id.0
+            $id
         );
     };
 }
@@ -175,7 +176,7 @@ impl World {
             player.rot = packet.rot;
             player.upgrades = packet.upgrades;
 
-            if packet.id.0 == self.me.id {
+            if packet.id == self.me.id {
                 self.get_me_mut().keystate = ServerKeyState::default();
             }
         } else {
@@ -200,7 +201,8 @@ impl World {
     }
     fn handle_player_upgrade(&mut self, packet: &PlayerUpgrade) {
         self.me.upgrades = ClientUpgrades {
-            unused: packet.upgrades,
+            // FIXME
+            unused: 0,// packet.upgrades,
             speed: packet.speed,
             defense: packet.defense,
             energy: packet.energy,
@@ -354,12 +356,12 @@ impl World {
                 if let Some(player) = self.players.get_mut(&evt.id) {
                     player.visible = false;
                 } else {
-                    warn_unknown_player!(EventLeaveHorizon, (evt.id, ()));
+                    warn_unknown_player!(EventLeaveHorizon, evt.id);
                 }
             }
             Mob => {
                 if let None = self.mobs.remove(&evt.id) {
-                    warn_unknown_mob!(EventLeaveHorizon, (evt.id, ()));
+                    warn_unknown_mob!(EventLeaveHorizon, evt.id);
                 }
             }
         }
@@ -401,7 +403,7 @@ impl World {
                 if mob.ty != data.ty {
                     warn!(
                         "Received EventRepel packet stating that the mob with id {} was {:?}, but that mob has a type of {:?}",
-                        data.id.0,
+                        data.id,
                         data.ty,
                         mob.ty
                     );

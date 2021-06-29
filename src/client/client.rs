@@ -1,66 +1,21 @@
+use airmash_protocol::*;
+use futures::prelude::*;
+use futures::stream::{SplitSink, SplitStream};
+use tokio::net::TcpStream;
 use url::Url;
 
-use std::f32::consts::PI;
-use std::ops::{Add, Rem};
-use std::time::{Duration, Instant};
-
-use tokio::prelude::*;
-use tokio::r#await;
-use tokio::timer::Interval;
-use tokio_tungstenite::connect_async;
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
 
-use futures::{Sink, Stream};
-
-use airmash_protocol::*;
-use airmash_protocol_v5::ProtocolV5;
+use std::f32::consts::{PI, TAU};
+use std::ops::{Add, Rem};
+use std::time::{Duration, Instant};
 
 use super::{ClientError, ClientResult};
 use crate::consts;
 use crate::game::World;
 
-type ClientSink = futures::stream::SplitSink<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::stream::Stream<
-            tokio::net::TcpStream,
-            tokio_tls::TlsStream<tokio::net::TcpStream>,
-        >,
-    >,
->;
-
-type FromFn<T, U> = fn(T) -> U;
-type ParseTimeFn = fn(std::time::Instant) -> ClientEvent;
-type ParsePacketFn = fn(tungstenite::Message) -> Result<Option<ClientEvent>, ClientError>;
-
-// This is ugly, but it means that client doesn't need type parameters
-type ClientStream = futures::stream::Fuse<
-    futures::stream::Select<
-        futures::stream::FilterMap<
-            futures::stream::AndThen<
-                futures::stream::MapErr<
-                    futures::stream::SplitStream<
-                        tokio_tungstenite::WebSocketStream<
-                            tokio_tungstenite::stream::Stream<
-                                tokio::net::TcpStream,
-                                tokio_tls::TlsStream<tokio::net::TcpStream>,
-                            >,
-                        >,
-                    >,
-                    FromFn<tungstenite::Error, ClientError>,
-                >,
-                ParsePacketFn,
-                Result<Option<ClientEvent>, ClientError>,
-            >,
-            fn(Option<ClientEvent>) -> Option<ClientEvent>
-        >,
-        futures::stream::Map<
-            futures::stream::MapErr<Interval, FromFn<tokio::timer::Error, ClientError>>,
-            ParseTimeFn,
-        >,
-    >,
->;
-
-static TICKER_TIME: Duration = Duration::from_millis(16);
+const TICKER_TIME: Duration = Duration::from_millis(16);
 
 pub enum ClientEvent {
     Frame(Instant),
@@ -69,68 +24,28 @@ pub enum ClientEvent {
 
 pub struct Client {
     pub world: World,
-    sink: Option<ClientSink>,
-    stream: ClientStream,
-}
 
-fn id<T>(v: T) -> T {
-    v
-}
-
-fn parse_packet(msg: Message) -> Result<Option<ClientEvent>, ClientError> {
-    //unsafe { std::intrinsics::breakpoint() };
-
-    let buf = match msg {
-        Message::Binary(buf) => buf,
-        Message::Ping(_) => return Ok(None),
-        Message::Pong(_) => return Ok(None),
-        Message::Text(txt) => {
-            return Err(ClientError::InvalidWsFrame(
-                format!("Server sent a text frame with body: {:?}", txt)
-            ));
-        },
-    };
-
-    ProtocolV5 {}
-        .deserialize_server(&buf)
-        .map(ClientEvent::Packet)
-        .map(Some)
-        .map_err(Into::into)
-}
-
-fn parse_time(inst: Instant) -> ClientEvent {
-    ClientEvent::Frame(inst)
+    sink: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+    stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    next_tick: Instant,
 }
 
 // Base functions
 impl Client {
     pub async fn new(url: Url) -> Result<Self, ClientError> {
-        let (ws_stream, _) = r#await!(connect_async(url))?;
-
+        let (ws_stream, _) = connect_async(url).await?;
         let (sink, stream) = ws_stream.split();
-
-        let stream1 = stream
-            .map_err(ClientError::from as FromFn<_, _>)
-            .and_then(parse_packet as ParsePacketFn)
-            .filter_map(id as fn(_) -> _);
-        let stream2 = Interval::new(Instant::now(), TICKER_TIME)
-            .map_err(ClientError::from as FromFn<_, _>)
-            .map(parse_time as ParseTimeFn);
 
         Ok(Self {
             world: World::default(),
-            sink: Some(sink),
-            stream: stream1.select(stream2).fuse(),
+            sink,
+            stream,
+            next_tick: Instant::now() + TICKER_TIME,
         })
     }
 
     async fn send_buf(&mut self, buf: Vec<u8>) -> Result<(), ClientError> {
-        let sink = self.sink.take().unwrap();
-        let msg = Message::Binary(buf);
-
-        self.sink = Some(r#await!(sink.send(msg))?);
-
-        Ok(())
+        Ok(self.sink.send(Message::Binary(buf)).await?)
     }
 
     async fn packet_update<'a>(&'a mut self, packet: &'a ServerPacket) -> Result<(), ClientError> {
@@ -140,7 +55,7 @@ impl Client {
         self.world.handle_packet(packet);
 
         match packet {
-            Ping(p) => r#await!(self.send(Pong { num: p.num }))?,
+            Ping(p) => self.send(Pong { num: p.num }).await?,
             _ => (),
         }
 
@@ -151,29 +66,40 @@ impl Client {
     where
         P: Into<ClientPacket> + 'static,
     {
-        let packets: Vec<_> = ProtocolV5 {}.serialize_client(&packet.into())?.collect();
-
-        for buf in packets {
-            r#await!(self.send_buf(buf))?;
-        }
-
+        self.send_buf(protocol::v5::serialize(&packet.into())?)
+            .await?;
         Ok(())
     }
 
     pub async fn next(&mut self) -> Result<Option<ClientEvent>, ClientError> {
-        use self::ClientEvent::*;
+        tokio::select! {
+            res = self.stream.next() => {
+                let packet: ServerPacket = match res {
+                    None => return Ok(None),
+                    Some(Err(e)) => return Err(e.into()),
+                    Some(Ok(message)) => match message {
+                        Message::Binary(buf) => protocol::v5::deserialize(&buf)?,
+                        Message::Ping(_) => return Ok(None),
+                        Message::Pong(_) => return Ok(None),
+                        Message::Text(txt) => {
+                            return Err(ClientError::InvalidWsFrame(format!(
+                                "Server sent a text frame with body: {:?}",
+                                txt
+                            )));
+                        }
+                        Message::Close(_) => panic!(),
+                    },
+                };
 
-        let val = match r#await!(self.stream.next()) {
-            Some(x) => x?,
-            None => return Ok(None),
-        };
-
-        match &val {
-            Packet(p) => r#await!(self.packet_update(p))?,
-            Frame(_) => (),
+                self.packet_update(&packet).await?;
+                return Ok(Some(ClientEvent::Packet(packet)));
+            }
+            _ = tokio::time::sleep_until(self.next_tick.into()) => {
+                let tick = self.next_tick;
+                self.next_tick += TICKER_TIME;
+                return Ok(Some(ClientEvent::Frame(tick)));
+            }
         }
-
-        Ok(Some(val))
     }
 }
 
@@ -190,26 +116,26 @@ impl Client {
         let seq = self.world.key_seq;
         self.world.key_seq += 1;
 
-        r#await!(self.send(Key { key, seq, state }))
+        self.send(Key { key, seq, state }).await
     }
 
     /// Press a key.
     ///
     /// This corresponds to calling [`send_key`] with `true`.
     pub async fn press_key(&mut self, key: KeyCode) -> ClientResult<()> {
-        r#await!(self.send_key(key, true))
+        self.send_key(key, true).await
     }
 
     /// Release a key.
     ///
     /// This corresponds to calling [`send_key`] with false.
     pub async fn release_key(&mut self, key: KeyCode) -> ClientResult<()> {
-        r#await!(self.send_key(key, false))
+        self.send_key(key, false).await
     }
 
     /// Process events until the target time passes.
     pub async fn wait_until(&mut self, tgt: Instant) -> ClientResult<()> {
-        while let Some(evt) = r#await!(self.next())? {
+        while let Some(evt) = self.next().await? {
             if let ClientEvent::Frame(frame) = evt {
                 if frame > tgt {
                     break;
@@ -222,7 +148,7 @@ impl Client {
 
     /// Process events for the given duration.
     pub async fn wait(&mut self, dur: Duration) -> ClientResult<()> {
-        r#await!(self.wait_until(Instant::now() + dur))
+        self.wait_until(Instant::now() + dur).await
     }
 
     /// Turn the plane by a given rotation.
@@ -234,7 +160,7 @@ impl Client {
     /// of the turn.
     pub async fn turn(&mut self, rot: Rotation) -> ClientResult<()> {
         let rotrate = consts::rotation_rate(self.world.get_me().plane);
-        let time: Duration = (rot.abs() / rotrate).min(Time::new(100.0)).into();
+        let time = Duration::from_secs_f32((rot.abs() / rotrate).min(100.0) / 60.0);
 
         let key = if rot < 0.0.into() {
             KeyCode::Left
@@ -242,13 +168,13 @@ impl Client {
             KeyCode::Right
         };
 
-        if rot.inner().abs() < 0.05 {
+        if rot.abs() < 0.05 {
             return Ok(());
         }
 
-        r#await!(self.press_key(key))?;
-        r#await!(self.wait(time))?;
-        r#await!(self.release_key(key))?;
+        self.press_key(key).await?;
+        self.wait(time).await?;
+        self.release_key(key).await?;
 
         Ok(())
     }
@@ -273,15 +199,13 @@ impl Client {
         // The basic idea comes from this SO answer
         // https://stackoverflow.com/questions/9505862/shortest-distance-between-two-degree-marks-on-a-circle
         let rot = self.world.get_me().rot;
-        let pi = Rotation::new(PI);
-        let pi2 = 2.0 * pi;
-        let mut dist = modulus(tgt - rot, pi2);
+        let mut dist = modulus(tgt - rot, TAU);
 
-        if dist > pi {
-            dist -= pi2;
+        if dist > PI {
+            dist -= TAU;
         }
 
-        r#await!(self.turn(dist))
+        self.turn(dist).await
     }
 
     /// Point the plane at a given point.
@@ -294,28 +218,40 @@ impl Client {
     pub async fn point_at(&mut self, pos: Position) -> ClientResult<()> {
         use crate::consts::BASE_DIR;
 
-        let rel = (pos - self.world.get_me().pos).normalized();
-        let mut angle = Vector2::dot(rel, BASE_DIR).acos();
+        let rel = (pos - self.world.get_me().pos).normalize();
+        let mut angle = Vector2::dot(&rel, &BASE_DIR).acos();
 
         if rel.x < 0.0.into() {
             angle = 2.0 * PI - angle;
         }
 
-        r#await!(self.turn_to(angle.into()))
+        self.turn_to(angle.into()).await
     }
 
     /// Say something in chat
     pub async fn chat(&mut self, text: String) -> ClientResult<()> {
-        r#await!(self.send(client::Chat { text }))
+        self.send(client::Chat { text: text.into() }).await
     }
 
     /// Say something in a text bubble
     pub async fn team_chat(&mut self, text: String) -> ClientResult<()> {
-        r#await!(self.send(client::TeamChat { text }))
+        self.send(client::TeamChat { text: text.into() }).await
     }
 
     /// Say something in a text bubble
     pub async fn say(&mut self, text: String) -> ClientResult<()> {
-        r#await!(self.send(client::Say { text }))
+        self.send(client::Say { text: text.into() }).await
+    }
+
+    pub async fn wait_for_login(&mut self) -> ClientResult<Option<server::Login>> {
+        use self::ClientEvent::*;
+
+        while let Some(x) = self.next().await? {
+            if let Packet(ServerPacket::Login(p)) = x {
+                return Ok(Some(p));
+            }
+        }
+
+        Ok(None)
     }
 }

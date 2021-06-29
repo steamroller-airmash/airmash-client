@@ -1,6 +1,6 @@
 use airmash_protocol::*;
 
-pub const BASE_DIR: Vector2<f32> = Vector2 { x: 0.0, y: -1.0 };
+pub const BASE_DIR: Vector2<f32> = Vector2::new(0.0, -1.0);
 
 /// Basically returns whatever value is in the
 /// config for the provided plane type.

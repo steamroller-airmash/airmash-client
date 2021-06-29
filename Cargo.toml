@@ -13,22 +13,20 @@ edition = "2018"
 admin = []
 default = ["admin"]
 
-[patch.crates-io]
-airmash-protocol = { git = "https://github.com/steamroller-airmash/airmash-protocol-rs" }
-airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-protocol-v5" }
-
 [dependencies]
-tokio = { version="*", features=["async-await-preview"] }
-tokio-tls = "*"
-futures = "*"
-tungstenite = "*"
-tokio-tungstenite = "*"
-airmash-protocol = "0.2"
-airmash-protocol-v5 = "0.0"
-log = "*"
+tokio = { version="1.0", features=["full"] }
+futures = "0.3"
+tungstenite = "0.13"
+tokio-tungstenite = "0.14"
+airmash-protocol = { git = "https://github.com/steamroller-airmash/airmash-protocol-rs", branch="remove-dimensioned" }
+# airmash-protocol-v5 = { git = "https://github.com/steamroller-airmash/airmash-protocol-v5" }
+log = "0.4"
 hashbrown = "*"
 url = "*"
 env_logger = "*"
 rand = "*"
 native-tls = "*"
-#pathfinding = "*"
+bstr = "*"
+
+[dev-dependencies]
+clap = "*"
