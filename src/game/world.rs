@@ -2,6 +2,7 @@ use super::*;
 use super::{Mob, Player};
 use crate::protocol::server::*;
 use crate::protocol::*;
+use crate::Config;
 
 use std::time::{Duration, Instant};
 
@@ -22,6 +23,8 @@ pub struct World {
     pub ping: u16,
     pub players_game: u32,
     pub players_total: u32,
+
+    pub config: Config,
 }
 
 macro_rules! warn_unknown {
@@ -54,7 +57,6 @@ impl World {
     pub fn get_me_mut<'a>(&'a mut self) -> &'a mut Player {
         self.players.get_mut(&self.me.id).unwrap()
     }
-
 
     pub fn handle_packet(&mut self, packet: &ServerPacket) {
         use self::ServerPacket::*;
@@ -89,7 +91,11 @@ impl World {
         }
     }
 
-    pub fn update(&mut self, _now: Instant) {}
+    pub fn update(&mut self, delta: f32) {
+        for (_, player) in self.players.iter_mut() {
+            player.update_time(delta, &self.config);
+        }
+    }
 }
 
 // Packet handling details
@@ -126,8 +132,7 @@ impl World {
 
         if let Some(player) = removed {
             self.names.remove(&player.name);
-        }
-        else {
+        } else {
             warn_unknown_player!(PlayerLeave, packet.id);
         }
     }
@@ -202,7 +207,7 @@ impl World {
     fn handle_player_upgrade(&mut self, packet: &PlayerUpgrade) {
         self.me.upgrades = ClientUpgrades {
             // FIXME
-            unused: 0,// packet.upgrades,
+            unused: 0, // packet.upgrades,
             speed: packet.speed,
             defense: packet.defense,
             energy: packet.energy,
@@ -282,7 +287,9 @@ impl World {
             })
             .collect();
 
-        self.names = self.players.values()
+        self.names = self
+            .players
+            .values()
             .map(|p| (p.name.clone(), p.id))
             .collect();
     }
@@ -294,6 +301,10 @@ impl World {
                     if !player.visible {
                         player.pos = x;
                     }
+                    
+                    player.status = PlayerStatus::Alive;
+                } else {
+                    player.status = PlayerStatus::Dead;
                 }
 
                 player.is_spec = data.pos.is_none();

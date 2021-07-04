@@ -62,6 +62,12 @@ impl Client {
         Ok(())
     }
 
+    async fn timer_update<'a>(&'a mut self, duration: Duration) -> Result<(), ClientError> {
+        self.world.update(duration.as_secs_f32() * 60.0);
+
+        Ok(())
+    }
+
     pub async fn send<P>(&mut self, packet: P) -> Result<(), ClientError>
     where
         P: Into<ClientPacket> + 'static,
@@ -97,6 +103,7 @@ impl Client {
             _ = tokio::time::sleep_until(self.next_tick.into()) => {
                 let tick = self.next_tick;
                 self.next_tick += TICKER_TIME;
+                self.timer_update(TICKER_TIME).await?;
                 return Ok(Some(ClientEvent::Frame(tick)));
             }
         }

@@ -99,9 +99,9 @@ async fn main() {
     };
 
     let mut bots = Vec::new();
-    for _ in 0..80 {
+    for i in 0..args.count {
         bots.push(tokio::spawn(run_bot(
-            args.name.clone(),
+            format!("{}-{}", args.name, i),
             args.server.clone(),
             args.flag.clone(),
             args.target.clone(),
@@ -116,6 +116,7 @@ struct Args {
     pub server: Url,
     pub flag: String,
     pub name: String,
+    pub count: usize,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -151,9 +152,16 @@ fn parse_args() -> Result<Args, String> {
         .arg(
             Arg::with_name("name")
                 .long("name")
-                .short("n")
                 .help("The bot's name.")
                 .default_value("FOLLOWERBOT")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("count")
+                .long("count")
+                .short("n")
+                .help("The number of bots to spawn.")
+                .default_value("1")
                 .takes_value(true),
         )
         .get_matches();
@@ -182,10 +190,21 @@ fn parse_args() -> Result<Args, String> {
         }
     };
 
+    let count = match args.value_of("count").unwrap().parse() {
+        Ok(count) => count,
+        Err(e) => {
+            return Err(format!(
+                "An error occurred while parsing the count argument: {}",
+                e
+            ));
+        }
+    };
+
     Ok(Args {
         target: target.into(),
         flag: flag.into(),
         name: name.into(),
         server: url,
+        count,
     })
 }

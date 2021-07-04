@@ -1,6 +1,9 @@
 use bstr::BString;
+use protocol::Vector2;
 
-use crate::protocol::server::*;
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
+
+use crate::{Config, protocol::server::*};
 use crate::protocol::*;
 
 #[derive(Default, Debug, Clone)]
@@ -45,5 +48,100 @@ impl Player {
         self.keystate = packet.keystate;
         self.upgrades = packet.upgrades;
         self.status = PlayerStatus::Alive;
+    }
+
+    pub fn update_time(&mut self, delta: f32, config: &Config) {
+        if self.status == PlayerStatus::Dead {
+            self.pos = Vector2::zeros();
+            return;
+        }
+
+        let mut movement_angle = None;
+        let info = &config.planes[self.plane];
+        let boost_factor = match self.plane == PlaneType::Predator && self.keystate.boost {
+            true => info.boost_factor,
+            false => 1.0,
+        };
+
+        if self.keystate.strafe {
+            if self.keystate.left {
+                movement_angle = Some(self.rot - FRAC_PI_2);
+            }
+            if self.keystate.right {
+                movement_angle = Some(self.rot + FRAC_PI_2);
+            }
+        } else {
+            if self.keystate.left {
+                self.rot -= delta * info.turn_factor;
+            }
+            if self.keystate.right {
+                self.rot += delta * info.turn_factor;
+            }
+        }
+
+        if self.keystate.up {
+            if let Some(angle) = movement_angle {
+                if self.keystate.right {
+                    movement_angle = Some(angle - PI * 0.25);
+                } else if self.keystate.left {
+                    movement_angle = Some(angle + PI * 0.25);
+                }
+            } else {
+                movement_angle = Some(self.rot);
+            }
+        } else if self.keystate.down {
+            if let Some(angle) = movement_angle {
+                if self.keystate.right {
+                    movement_angle = Some(angle + PI * 0.25);
+                } else if self.keystate.left {
+                    movement_angle = Some(angle - PI * 0.25);
+                }
+            } else {
+                movement_angle = Some(self.rot + PI);
+            }
+        }
+
+        if let Some(angle) = movement_angle {
+            let mult = info.accel_factor * delta * boost_factor;
+            self.vel += Vector2::new(mult * angle.sin(), mult * -angle.cos());
+        }
+
+        let old_vel = self.vel;
+        let speed = self.vel.norm();
+        let mut max_speed = info.max_speed * boost_factor;
+        let min_speed = info.min_speed;
+
+        if self.upgrades.speed != 0 {
+            max_speed *= config.upgrades.speed.factor[self.upgrades.speed as usize];
+        }
+
+        if self.upgrades.inferno {
+            max_speed *= info.inferno_factor;
+        }
+
+        if self.keystate.flagspeed {
+            max_speed = info.flag_speed;
+        }
+
+        if speed > max_speed {
+            self.vel *= max_speed / speed;
+        } else {
+            if self.vel.x.abs() > min_speed || self.vel.y.abs() > min_speed {
+                self.vel *= 1.0 - info.brake_factor * delta;
+            } else {
+                self.vel = Vector2::default();
+            }
+        }
+
+        self.pos += old_vel * delta + (self.vel - old_vel) * delta * 0.5;
+        self.rot = (self.rot % TAU + TAU) % TAU;
+
+        let bound = Vector2::new(16352.0, 8160.0);
+        if self.pos.x.abs() > bound.x {
+            self.pos.x = self.pos.x.signum() * bound.x;
+        }
+        if self.pos.y.abs() > bound.y {
+            self.pos.y = self.pos.y.signum() * bound.y;
+        }
     }
 }
