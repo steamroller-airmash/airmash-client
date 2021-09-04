@@ -87,6 +87,10 @@ impl World {
             EventLeaveHorizon(p) => self.handle_event_leave_horizon(p),
             EventRepel(p) => self.handle_event_repel(p),
             EventStealth(p) => self.handle_event_stealth(p),
+
+            GameFlag(p) => {
+                info!("Flag update! pos = {:?}", (p.pos.x, p.pos.y));
+            }
             _ => (),
         }
     }

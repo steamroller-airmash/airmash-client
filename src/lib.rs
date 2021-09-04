@@ -4,18 +4,14 @@
 
 #[macro_use]
 extern crate log;
+
 pub extern crate airmash_protocol as protocol;
-extern crate futures;
-extern crate hashbrown;
-extern crate tokio;
-extern crate tokio_tungstenite;
-extern crate tungstenite;
-extern crate url;
 
 mod client;
 mod game;
 mod config;
-//mod map;
+mod util;
+// pub mod map;
 
 pub mod consts;
 

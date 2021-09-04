@@ -79,7 +79,7 @@ impl Client {
 
             self.point_at(pos).await?;
             self.wait(Duration::from_millis(
-                (self.world.ping * 2).min(1000).max(10) as u64
+                (self.world.ping * 2).min(1000).max(100) as u64
             )).await?;
         }
 
