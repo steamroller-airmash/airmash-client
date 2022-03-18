@@ -94,6 +94,7 @@ impl Client {
                             )));
                         }
                         Message::Close(_) => panic!(),
+                        _ => unimplemented!()
                     },
                 };
 
